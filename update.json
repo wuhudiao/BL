@@ -1,6 +1,6 @@
 {
-  "version": "v121.8",
-  "versionCode": 218,
-  "zipUrl": "https://github.com/yuanxiaxing5-cyber/BL/releases/download/v121.8/bl-release-arm64-v8a-1.2.1-218.zip",
-  "changelog": "https://raw.githubusercontent.com/yuanxiaxing5-cyber/BL/changelog/changelog.md"
+  "version": "v121.10",
+  "versionCode": 220,
+  "zipUrl": "https://github.com/wuhudiao/BL/releases/download/v121.10/bl-release-arm64-v8a-1.2.1-220.zip",
+  "changelog": "https://raw.githubusercontent.com/wuhudiao/BL/changelog/changelog.md"
 }
