@@ -510,7 +510,7 @@ function render(state, error) {
   if (!state.installed) {
     page.appendChild(group(null, [{
       icon: 'shield',
-      title: '没有安装 Oh My Keymint',
+      title: '没有安装 安卓设备隐藏bl',
       summary: '模块 id：oh_my_keymint。装好并重启一次后这里会出现配置项。',
       onClick: refresh,
     }]));
@@ -525,7 +525,7 @@ function render(state, error) {
 
   page.appendChild(group(null, [{
     icon: 'shield',
-    title: 'Oh My Keymint',
+    title: '安卓设备隐藏bl',
     summary: state.version + ' · ' + (state.enabled ? '已启用' : '已禁用'),
   }]));
 
