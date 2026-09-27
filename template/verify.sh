@@ -8,7 +8,6 @@ abort_verify() {
   abort    "*********************************************************"
 }
 
-# extract <zip> <file> <target dir> <junk paths>
 extract() {
   zip=$1
   file=$2

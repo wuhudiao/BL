@@ -1,4 +1,3 @@
-# shellcheck disable=SC2034
 SKIPUNZIP=1
 
 SONAME="Oh My Keymint"
@@ -26,7 +25,6 @@ fi
 VERSION=$(grep_prop version "${TMPDIR}/module.prop")
 ui_print "- Installing $SONAME $VERSION"
 
-# check architecture
 support=false
 for abi in $SUPPORTED_ABIS
 do
@@ -40,7 +38,6 @@ else
   ui_print "- Device platform: $ARCH"
 fi
 
-# check android
 if [ "$API" -lt $MIN_SDK ]; then
   ui_print "! Unsupported sdk: $API"
   abort "! Minimal supported sdk is $MIN_SDK"
@@ -72,8 +69,6 @@ extract "$ZIPFILE" 'keybox.xml'      "$MODPATH"
 chmod 755 "$MODPATH/daemon" "$MODPATH/daemon-injector" \
   "$MODPATH/post-fs-data.sh" "$MODPATH/service.sh"
 
-# WebUI：管理器看到 webroot/ 就会显示入口。
-# 伴生的 .sha256 只用来校验，不装进模块目录（早先 'webroot/*' 会把它们一起解出来）。
 ui_print "- Extracting webui"
 unzip -o "$ZIPFILE" 'webroot/*' -x 'webroot/*.sha256' -d "$MODPATH" >&2
 [ -f "$MODPATH/webroot/index.html" ] || abort "! Missing webroot/index.html"
@@ -108,7 +103,7 @@ chmod 755 "$BINDIR/keymint" "$BINDIR/inject"
 CONFIG_DIR=/data/adb/omk
 mkdir -p "$CONFIG_DIR"
 rm -f "$CONFIG_DIR/restart.keymint" "$CONFIG_DIR/restart.injector" "$CONFIG_DIR/restart.all"
-rm -f "$CONFIG_DIR/keymint" "$CONFIG_DIR/inject" "$CONFIG_DIR/injector" # clean up old hot-update binaries
+rm -f "$CONFIG_DIR/keymint" "$CONFIG_DIR/inject" "$CONFIG_DIR/injector"
 
 if [ ! -e "$CONFIG_DIR/omkdata" ] && [ ! -L "$CONFIG_DIR/omkdata" ]; then
   ln -s /data/misc/keystore/omk "$CONFIG_DIR/omkdata"

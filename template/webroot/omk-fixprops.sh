@@ -1,6 +1,4 @@
 #!/system/bin/sh
-# 修正系统属性：把「已解锁 / 可调试」那一面的属性改回正常机器的样子。
-# 由 keyMint 配置页的开关安装，删除该文件即可关闭。
 command -v resetprop >/dev/null 2>&1 || PATH="/data/adb/ksu/bin:/data/adb/magisk:$PATH"
 export PATH
 

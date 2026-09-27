@@ -1,6 +1,5 @@
 'use strict';
 
-/* keyMint 配置 WebUI —— 与管理器里的 KeymintScreen / Keymint.kt 同构 */
 
 const CONFIG_DIR = '/data/misc/keystore/omk';
 const STATE_DIR = '/data/adb/omk';
@@ -33,7 +32,6 @@ const DEFAULT_KEYBOX_URL =
 
 let MODULE_DIR = '/data/adb/modules/oh_my_keymint';
 
-/* ---------- 图标 ---------- */
 
 const ICONS = {
   shield: 'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z',
@@ -54,7 +52,6 @@ function svgIcon(name) {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + ICONS[name] + '"/></svg>';
 }
 
-/* ---------- KSU 桥 ---------- */
 
 const hasKsu = typeof ksu !== 'undefined' && ksu !== null && typeof ksu.exec === 'function';
 let cbSeq = 0;
@@ -80,7 +77,7 @@ function sh(cmd, options) {
 function toast(message) {
   if (!message) return;
   if (hasKsu && typeof ksu.toast === 'function') {
-    try { ksu.toast(message); return; } catch (e) { /* 回退到页面内的提示 */ }
+    try { ksu.toast(message); return; } catch (e) {  }
   }
   const box = document.getElementById('toast');
   box.textContent = message;
@@ -89,7 +86,6 @@ function toast(message) {
   toast.timer = setTimeout(() => { box.hidden = true; }, 2200);
 }
 
-/** 和 [sh] 一样跑命令，但不因非 0 退出而 reject —— 有些脚本（如 HMA 配置）靠输出说明原因。 */
 function shRaw(command, options) {
   if (!hasKsu) return Promise.reject(new Error('这个页面需要在 KernelSU 管理器里打开'));
   return new Promise((resolve, reject) => {
@@ -107,7 +103,6 @@ function shRaw(command, options) {
   });
 }
 
-/* ---------- 小工具 ---------- */
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -136,7 +131,6 @@ function quoteShell(value) {
   return "'" + String(value).replace(/'/g, "'\\''") + "'";
 }
 
-/* ---------- 状态读取（对应 STATUS_SCRIPT） ---------- */
 
 function statusScript() {
   return [
@@ -202,7 +196,6 @@ function findValueLine(text, key) {
   return null;
 }
 
-/* ---------- scoop（移植 parse_scoop / set_scoop） ---------- */
 
 function parseScoop(text) {
   const range = findScoopArray(text);
@@ -293,7 +286,6 @@ function firstTableHeader(text) {
   return text.length;
 }
 
-/* ---------- log_level ---------- */
 
 function replaceLogLevel(text, level) {
   let replaced = false;
@@ -310,17 +302,14 @@ function replaceLogLevel(text, level) {
     }
   }
   if (!replaced) return null;
-  // split('\n') / join('\n') 是无损的，直接拼回去即可（Kotlin 那边要去掉循环多加的一个换行）
   return out.join('\n');
 }
 
-/* ---------- 文件读写 ---------- */
 
 async function readFile(path) {
   return await sh('cat ' + path + ' 2>/dev/null');
 }
 
-/** 走 <path>.new 再改名，保证 keystore 这个读文件的用户仍然是属主。 */
 async function writeFile(path, content, mode = '600', uid = KEYSTORE_UID) {
   const encoded = b64utf8(content);
   const script = [
@@ -339,7 +328,6 @@ async function isFile(path) {
   return (await sh('[ -f ' + path + ' ] && echo 1 || echo 0')).trim() === '1';
 }
 
-/* ---------- 动作 ---------- */
 
 async function setFixProps(enable) {
   if (enable) {
@@ -398,7 +386,6 @@ async function downloadKeybox(url) {
   }
 }
 
-/* ---------- 应用列表 ---------- */
 
 async function listApps() {
   const names = JSON.parse(ksu.listPackages('user'));
@@ -409,14 +396,12 @@ async function listApps() {
     .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN', { sensitivity: 'base' }));
 }
 
-/* ---------- 渲染 ---------- */
 
 const page = document.getElementById('page');
 const overlay = document.getElementById('overlay');
 const dialogBox = document.getElementById('dialog');
 const tabbar = document.getElementById('tabbar');
 
-/* ---------- 路由（悬浮底栏） ---------- */
 
 const ROUTES = [
   { id: 'keymint', label: 'keyMint', icon: 'shield' },
@@ -426,7 +411,6 @@ let route = 'keymint';
 
 function renderTabbar() {
   tabbar.hidden = false;
-  // 只重建按钮，那个滑动的玻璃胶囊留着
   tabbar.querySelectorAll('.tab').forEach((node) => node.remove());
   for (const item of ROUTES) {
     const button = el('button', 'tab' + (route === item.id ? ' active' : ''));
@@ -447,7 +431,6 @@ function renderTabbar() {
   moveTabbarPill();
 }
 
-/** 把玻璃胶囊挪到当前标签底下（用 transform 走过渡，看起来是滑过去的）。 */
 function moveTabbarPill() {
   const pill = tabbar.querySelector('.tabbar-pill');
   const active = tabbar.querySelector('.tab.active');
@@ -596,7 +579,6 @@ async function doRestart(what) {
   return what === 'all' ? '已请求全部重启' : '已请求重启 ' + what;
 }
 
-/* ---------- 弹窗框架 ---------- */
 
 function closeDialog() {
   overlay.hidden = true;
@@ -639,7 +621,6 @@ function mkBtn(text, onClick, primary) {
   return button;
 }
 
-/* ---------- 弹窗：选择软件 ---------- */
 
 async function openAppsDialog(state) {
   const chosen = new Set([...state.scoop, ...ALWAYS_ROUTED]);
@@ -743,7 +724,6 @@ async function openAppsDialog(state) {
   paintList();
 }
 
-/* ---------- 弹窗：日志级别 ---------- */
 
 function openLevelDialog(state) {
   const body = el('div', 'dialog-body');
@@ -784,7 +764,6 @@ function openLevelDialog(state) {
   });
 }
 
-/* ---------- 弹窗：keybox ---------- */
 
 function openKeyboxDialog(state) {
   const body = el('div');
@@ -812,16 +791,9 @@ function openKeyboxDialog(state) {
   });
 }
 
-/** 兜底：还是走管理器的文件选择器。 */
 function pickWithFileManager() {
   const input = document.createElement('input');
   input.type = 'file';
-  /*
-   * accept 不写具体类型：管理器用 fileChooserParams.createIntent()，会把它填进 intent 的
-   * type / EXTRA_MIME_TYPES。选系统文件管理器时那样会把 keybox.xml 灰掉选不中（系统按
-   * MediaStore 认的 MIME 过滤，.xml 常常被当成 octet-stream）；写成全通配两边都正常。
-   * 文件内容本来就在后面校验，不靠这里筛。
-   */
   input.accept = '*/*';
   input.addEventListener('change', () => {
     const file = input.files && input.files[0];
@@ -831,7 +803,6 @@ function pickWithFileManager() {
       try {
         text = await file.text();
       } catch (e) {
-        // 有的选择器给回来的 URI 读不了，退回到 FileReader 再试一次
         text = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result || ''));
@@ -843,7 +814,7 @@ function pickWithFileManager() {
       return '已替换 keybox';
     });
   });
-  input.addEventListener('cancel', () => { /* 用户点了取消，什么都不做 */ });
+  input.addEventListener('cancel', () => {  });
   input.click();
 }
 
@@ -863,7 +834,6 @@ function openRemoteKeyboxDialog() {
     actions: [
       actionButton('开始更新', () => {
         const url = field.value.trim();
-        // 明文 http 会把密钥材料暴露在链路上。
         if (!/^https:\/\//i.test(url)) {
           toast('地址必须以 https:// 开头');
           return;
@@ -879,10 +849,8 @@ function openRemoteKeyboxDialog() {
   });
 }
 
-/* ---------- 页面：一键配置隐藏应用列表 ---------- */
 
 const HMA_SCRIPT_PATH = '/data/adb/ksu/hma-config.sh';
-/** Scene 版要把 Scene 自己排除在隐藏范围外。 */
 const SCENE_PACKAGE = 'com.omarea.vtools';
 
 function renderHideApp() {
@@ -895,7 +863,6 @@ function renderHideApp() {
   }]));
 }
 
-/** 管理器此刻就在前台，从窗口焦点里读它的包名。 */
 async function detectManagerPackage() {
   const probes = [
     "dumpsys window 2>/dev/null | grep -m1 -E 'mCurrentFocus|mFocusedApp'",
@@ -903,12 +870,12 @@ async function detectManagerPackage() {
   ];
   for (const cmd of probes) {
     let out = '';
-    try { out = (await shRaw(cmd)).out; } catch (e) { /* 换下一种 */ }
+    try { out = (await shRaw(cmd)).out; } catch (e) {  }
     const hit = String(out).match(/([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)\//);
     if (hit) return hit[1];
   }
   let list = '';
-  try { list = (await shRaw("pm list packages -3 2>/dev/null | sed 's/^package://'")).out; } catch (e) { /* 放弃 */ }
+  try { list = (await shRaw("pm list packages -3 2>/dev/null | sed 's/^package://'")).out; } catch (e) {  }
   return String(list).split('\n').map((s) => s.trim()).filter(Boolean)
     .find((p) => /kernelsu|diksu/i.test(p)) || '';
 }
@@ -918,7 +885,6 @@ async function runHideAppList(scene) {
   if (!response.ok) throw new Error('读不到 hma-oss-config.sh（HTTP ' + response.status + '）');
   const script = await response.text();
 
-  // 脚本本体走 base64 过去，省得再套一层转义。
   const wrote = await sh(
     "printf '%s' " + quoteShell(b64utf8(script)) + ' | base64 -d > ' + HMA_SCRIPT_PATH + ' || exit 1\n' +
     'chmod 700 ' + HMA_SCRIPT_PATH + '\necho ok'
@@ -931,14 +897,12 @@ async function runHideAppList(scene) {
     env += 'HMA_EXTRA_EXCLUDE=' + quoteShell(SCENE_PACKAGE) + ' HMA_NO_ACCESSIBILITY=1 ';
   }
 
-  // 脚本自己会说明原因（未安装 HMA / 找不到配置）并返回非 0，所以两条流都要读。
   const result = await shRaw(env + 'sh ' + HMA_SCRIPT_PATH);
   const text = [result.out, result.err].filter((s) => s.trim()).join('\n').trim();
   if (result.code !== 0) throw new Error(text || '命令执行失败');
   return text;
 }
 
-/** 正在跑的脚本叫不回来，所以这个阶段不给按钮也不能关。 */
 function showHideAppPhase(phase, text) {
   const body = el('div');
   if (phase === 'pick') {
@@ -982,7 +946,6 @@ async function startHideApp(scene) {
   showHideAppPhase('done', text);
 }
 
-/* ---------- 动作入口 ---------- */
 
 let busy = false;
 
@@ -1007,7 +970,6 @@ async function refresh() {
   }
 }
 
-/* ---------- 启动 ---------- */
 
 (function boot() {
   try {
@@ -1015,7 +977,7 @@ async function refresh() {
       const info = JSON.parse(ksu.moduleInfo());
       if (info && info.moduleDir) MODULE_DIR = info.moduleDir;
     }
-  } catch (e) { /* 用默认路径 */ }
+  } catch (e) {  }
 
   if (!hasKsu) {
     page.appendChild(group(null, [{

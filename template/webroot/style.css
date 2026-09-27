@@ -1,25 +1,17 @@
-/* Miuix 风格，对应管理器里的 KeymintScreen */
 
-/*
- * 颜色优先用管理器注入的变量（internal/colors.css），取不到时回退到固定值。
- * 回退值本身按 prefers-color-scheme 分深浅两套。
- */
 :root {
   --accent: var(--primary, #3482ff);
   --bg: var(--background, #f7f7f7);
-  /* Miuix Card 用 surfaceContainer（深色下 surface 是纯黑，卡片会糊在一起） */
   --card: var(--surfaceContainer, #ffffff);
   --on-bg: var(--onBackground, #000000);
   --on-card: var(--onSurface, #000000);
   --summary: var(--onSurfaceVariant, #8a8a8e);
   --divider: var(--outlineVariant, rgba(0, 0, 0, 0.08));
   --track: var(--tonalSurface, #e9e9ea);
-  /* Miuix Switch 未选中轨道色 = secondary */
   --switch-track: #e6e6e6;
   --knob: #ffffff;
   --overlay: var(--scrim, rgba(0, 0, 0, 0.35));
   --danger: var(--error, #e54545);
-  /* Miuix 按钮：默认 secondaryVariant / onSecondaryVariant */
   --btn-bg: #f0f0f0;
   --btn-fg: #303030;
   --btn-bg-disabled: #f2f2f2;
@@ -61,16 +53,10 @@ html, body {
 }
 
 .page {
-  /* 顶部要自己让开状态栏：页面一旦请求 internal/insets.css，管理器就不再替我们留边距 */
   padding: calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 12px
     calc(84px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 
-/*
- * 悬浮底栏 —— 对齐管理器里那个 iOS 液态玻璃的底栏（miuix IosLiquidGlassNavigationBar）：
- * 高 64dp、内边距 4dp、容器 40% 透明 + 背景模糊、iOS 那圈高光描边、阴影 10dp。
- * 选中的胶囊 = accent 15%（非模糊模式下的取值）。
- */
 .tabbar {
   position: fixed;
   left: 12px;
@@ -82,11 +68,9 @@ html, body {
   padding: 4px;
   background: var(--card);
   border-radius: 50px;
-  /* 液态玻璃：半透明容器 + 背景模糊（经过底栏的文字会被糊掉） */
   background: color-mix(in srgb, var(--card) 40%, transparent);
   -webkit-backdrop-filter: blur(4px) saturate(180%);
   backdrop-filter: blur(4px) saturate(180%);
-  /* 底座也要浮起来：一层大范围柔光 + 一层贴边的接触阴影 */
   box-shadow:
     0 8px 28px rgba(0, 0, 0, 0.16),
     0 2px 8px rgba(0, 0, 0, 0.1);
@@ -101,7 +85,6 @@ html, body {
   }
 }
 
-/* 顶部那道高光（BloomStroke 的近似） */
 .tabbar::after {
   content: "";
   position: absolute;
@@ -119,7 +102,6 @@ html, body {
   }
 }
 
-/* 不支持背景模糊时退回不透明底色，别让字看不清 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .tabbar { background: var(--card); }
 }
@@ -133,7 +115,6 @@ html, body {
   left: 0;
   border-radius: 44px;
   background: color-mix(in srgb, var(--accent) 15%, transparent);
-  /* 外阴影给立体感 + 内高光/内阴影压出玻璃的厚度 */
   box-shadow:
     0 3px 10px color-mix(in srgb, var(--accent) 32%, transparent),
     0 1px 3px rgba(0, 0, 0, 0.18),
@@ -177,7 +158,6 @@ html, body {
 .tabbar .tab.active { color: var(--accent); }
 
 .small-title {
-  /* Miuix SmallTitle：subtitle(14sp, Bold)，insideMargin = 28dp / 8dp */
   margin: 12px 0 0 0;
   padding: 8px 28px;
   font-size: 14px;
@@ -196,7 +176,6 @@ html, body {
 .row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  /* Miuix BasicComponent：start / center / end 全部垂直居中 */
   align-items: center;
   column-gap: 8px;
   min-height: 56px;
@@ -233,7 +212,6 @@ html, body {
 
 .row .body { grid-column: 2; }
 
-/* 没有图标时第一列是空的，靠显式列号把它们钉死，别让网格自动排布串位 */
 .row .trailing,
 .row .switch,
 .row .radio,
@@ -270,10 +248,8 @@ html, body {
 
 .chevron svg { width: 20px; height: 20px; fill: currentColor; }
 
-/* 开关：Miuix 的胶囊形 */
 .switch {
   position: relative;
-  /* Miuix Switch：49x28，胶囊，拇指 20，偏移 4 -> 25 */
   width: 49px;
   height: 28px;
   border-radius: 14px;
@@ -299,7 +275,6 @@ html, body {
 
 .switch.on::after { transform: translateX(21px); }
 
-/* 弹窗 */
 .overlay {
   position: fixed;
   inset: 0;
@@ -311,7 +286,6 @@ html, body {
   z-index: 20;
 }
 
-/* 作者样式里的 display 会盖掉 hidden 属性的 display:none，必须显式关掉 */
 .overlay[hidden],
 .toast[hidden] { display: none; }
 
@@ -323,7 +297,6 @@ html, body {
   flex-direction: column;
   background: var(--card);
   color: var(--on-card);
-  /* Miuix DialogDefaults：MaxWidth 420dp / CornerRadius 32dp（居中呈现） */
   border-radius: 32px;
   padding: 24px;
   overflow: hidden;
@@ -359,7 +332,6 @@ html, body {
 
 .dialog .dialog-actions.end { justify-content: flex-end; }
 
-/* 三个按钮平分一行（Miuix 里那些 weight(1f) 的按钮） */
 .dialog .dialog-actions.fill .btn { flex: 1; min-width: 0; padding: 0 10px; }
 
 .dialog-text {
@@ -391,7 +363,6 @@ html, body {
 
 .btn:active { filter: brightness(0.94); }
 
-/* primary：Miuix 的 textButtonColorsPrimary，蓝底白字 */
 .btn.primary { background: var(--accent); color: var(--on-primary); }
 .btn.primary:active { filter: brightness(0.92); }
 
@@ -403,7 +374,6 @@ html, body {
   cursor: default;
 }
 
-/* 输入框 */
 .field {
   width: 100%;
   appearance: none;
@@ -425,11 +395,9 @@ html, body {
   margin-bottom: 2px;
 }
 
-/* 列表 */
 .list { margin-top: 8px; }
 
 .list .row {
-  /* Miuix 的列表弹窗内边距：horizontal 30dp / vertical 16dp */
   padding: 16px 30px;
   min-height: 0;
 }
@@ -480,12 +448,10 @@ html, body {
 .muted { color: var(--summary); font-size: 14px; padding: 12px 2px; }
 .danger { color: var(--danger); }
 
-/* 状态点 */
 .dot { display: inline-block; margin-right: 4px; }
 .dot.ok { color: var(--accent); }
 .dot.no { color: var(--summary); }
 
-/* toast */
 .toast {
   position: fixed;
   left: 50%;

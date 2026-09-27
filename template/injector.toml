@@ -1,6 +1,3 @@
-# With `[filter].enabled = true`, a UID is intercepted when any package
-# sharing that UID is listed in `scoop`.
-# Filter deny settings still apply to every package resolved for the UID.
 
 version = 1
 
