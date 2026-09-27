@@ -18,7 +18,7 @@ Android Keystore 伪造器的自定义密钥库实现
 2. 如需要，[配置 OMK](docs/CONFIGURATION.md)。
 3. 替换模板 keybox.xml（如需要）
 
-keybox 文件必须是一个**有效的** XML 文件，同时包含 EC 和 RSA 链，这意味着文件中不能有任何额外内容，例如水印或不可见字符。
+keybox 文件必须是一个**有效的** XML 文件，这意味着文件中不能有任何额外内容，例如水印或不可见字符。只带一条链的文件也接受：缺失的那条链会从模块自带的模板补齐。仍然建议自己提供完整的 EC + RSA 两条链，因为自带的模板是公开的软件认证密钥。
 
 生效的配置文件位于 `/data/misc/keystore/omk/config.toml` 和
 `/data/misc/keystore/omk/injector.toml`。完整的注释示例、逐字段说明、安全注意事项以及重启要求，请阅读

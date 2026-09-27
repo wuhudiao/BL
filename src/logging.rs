@@ -35,13 +35,13 @@ fn init_logger_inner() -> Result<()> {
         vec![Box::new(android_logger), Box::new(log4rs)],
         log::Level::Trace,
     )?;
-    log::set_max_level(LevelFilter::Off);
+    log::set_max_level(LevelFilter::Debug);
 
     if file_logging_ready {
         log::info!(
             "file logging enabled at {} with level {:?}",
             DEFAULT_LOG_PATH,
-            LevelFilter::Off
+            LevelFilter::Debug
         );
     }
 

@@ -100,8 +100,28 @@ impl KeyBox {
             }
         }
 
-        let rsa_entry = rsa_entry.context("missing RSA key entry in keybox.xml")?;
-        let ec_entry = ec_entry.context("missing EC key entry in keybox.xml")?;
+        // Single-chain keyboxes are the shape every other keybox tool writes
+        // (the Google sample carries an EC chain alone), so a missing algorithm
+        // is filled from the bundled template instead of being rejected. Both
+        // signing keys stay registered either way, which is what the rest of
+        // the module expects.
+        if rsa_entry.is_none() && ec_entry.is_none() {
+            bail!("keybox.xml contains no EC or RSA key entry");
+        }
+        let rsa_entry = match rsa_entry {
+            Some(entry) => entry,
+            None => {
+                warn!("keybox.xml has no RSA key entry; using the bundled RSA chain");
+                bundled_entry(KeyAlgorithm::Rsa)?
+            }
+        };
+        let ec_entry = match ec_entry {
+            Some(entry) => entry,
+            None => {
+                warn!("keybox.xml has no EC key entry; using the bundled EC chain");
+                bundled_entry(KeyAlgorithm::Ec)?
+            }
+        };
 
         let rsa_info = Self::build_rsa_info(rsa_entry)?;
         let ec_info = Self::build_ec_info(ec_entry)?;
@@ -346,6 +366,38 @@ fn algorithm_name(algorithm: KeyAlgorithm) -> &'static str {
         KeyAlgorithm::Ec => "EC",
         KeyAlgorithm::Rsa => "RSA",
     }
+}
+
+/// Pulls one chain out of the bundled template, for an algorithm the local
+/// keybox.xml does not carry.
+fn bundled_entry(algorithm: KeyAlgorithm) -> Result<ParsedKeyEntry> {
+    for captures in KEY_BLOCK_RE.captures_iter(BUNDLED_KEYBOX_XML) {
+        let name = captures
+            .get(1)
+            .map(|m| m.as_str().trim())
+            .unwrap_or_default();
+        let wanted = match algorithm {
+            KeyAlgorithm::Ec => name == "ecdsa" || name == "ec",
+            KeyAlgorithm::Rsa => name == "rsa",
+        };
+        if !wanted {
+            continue;
+        }
+        let body = captures
+            .get(2)
+            .map(|m| m.as_str())
+            .ok_or_else(|| anyhow!("missing key block body in bundled keybox.xml"))?;
+        return ParsedKeyEntry::from_xml_block(body).with_context(|| {
+            format!(
+                "failed to parse bundled {} key entry",
+                algorithm_name(algorithm)
+            )
+        });
+    }
+    bail!(
+        "bundled keybox.xml has no {} key entry",
+        algorithm_name(algorithm)
+    )
 }
 
 fn validate_chain_matches_key(
@@ -729,6 +781,33 @@ mod tests {
         let ec_cert = encode_pem_block("CERTIFICATE", &keybox.ec_info.chain[0].encoded_certificate);
         let modified_xml = BUNDLED_KEYBOX_XML.replacen(&rsa_cert, &ec_cert, 1);
         assert!(KeyBox::from_xml_str(&modified_xml).is_err());
+    }
+
+    #[test]
+    fn single_chain_keybox_fills_the_missing_entry_from_the_bundled_template() {
+        let bundled = KeyBox::new();
+        let block = |algorithm: &str| {
+            Regex::new(&format!(r#"(?s)<Key\s+algorithm="{algorithm}">.*?</Key>"#))
+                .unwrap()
+                .find(BUNDLED_KEYBOX_XML)
+                .unwrap_or_else(|| panic!("bundled template carries a {algorithm} block"))
+                .as_str()
+                .to_owned()
+        };
+
+        let ec_only =
+            KeyBox::from_xml_str(&BUNDLED_KEYBOX_XML.replacen(&block("rsa"), "", 1)).unwrap();
+        assert_eq!(
+            ec_only.rsa_info.chain[0].encoded_certificate,
+            bundled.rsa_info.chain[0].encoded_certificate
+        );
+
+        let rsa_only =
+            KeyBox::from_xml_str(&BUNDLED_KEYBOX_XML.replacen(&block("ecdsa"), "", 1)).unwrap();
+        assert_eq!(
+            rsa_only.ec_info.chain[0].encoded_certificate,
+            bundled.ec_info.chain[0].encoded_certificate
+        );
     }
 
     #[test]

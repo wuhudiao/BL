@@ -1,12 +1,10 @@
-rm -rf /data/adb/omk
-rm -rf /data/adb/modules/bl
-rm -rf /data/adb/modules/tricky_store
-rm -rf /data/adb/modules/TEESimulator
 # shellcheck disable=SC2034
 SKIPUNZIP=1
+
 SONAME="Oh My Keymint"
-SUPPORTED_ABIS="arm64 arm64-v8a"
+SUPPORTED_ABIS="arm64 x64"
 MIN_SDK=29
+
 if [ "$BOOTMODE" ] && [ "$KSU" ]; then
   ui_print "- Installing from KernelSU app"
   ui_print "- KernelSU version: $KSU_KERNEL_VER_CODE (kernel) + $KSU_VER_CODE (ksud)"
@@ -24,8 +22,10 @@ else
   ui_print "! Please install from KernelSU or Magisk app"
   abort    "*********************************************************"
 fi
+
 VERSION=$(grep_prop version "${TMPDIR}/module.prop")
 ui_print "- Installing $SONAME $VERSION"
+
 # check architecture
 support=false
 for abi in $SUPPORTED_ABIS
@@ -39,6 +39,7 @@ if [ "$support" == "false" ]; then
 else
   ui_print "- Device platform: $ARCH"
 fi
+
 # check android
 if [ "$API" -lt $MIN_SDK ]; then
   ui_print "! Unsupported sdk: $API"
@@ -46,6 +47,7 @@ if [ "$API" -lt $MIN_SDK ]; then
 else
   ui_print "- Device sdk: $API"
 fi
+
 ui_print "- Extracting verify.sh"
 unzip -o "$ZIPFILE" 'verify.sh' -d "$TMPDIR" >&2
 if [ ! -f "$TMPDIR/verify.sh" ]; then
@@ -57,6 +59,7 @@ fi
 . "$TMPDIR/verify.sh"
 extract "$ZIPFILE" 'customize.sh'  "$TMPDIR/.vunzip"
 extract "$ZIPFILE" 'verify.sh'     "$TMPDIR/.vunzip"
+
 ui_print "- Extracting module files"
 extract "$ZIPFILE" 'module.prop'     "$MODPATH"
 extract "$ZIPFILE" 'post-fs-data.sh' "$MODPATH"
@@ -66,15 +69,24 @@ extract "$ZIPFILE" 'daemon'          "$MODPATH"
 extract "$ZIPFILE" 'daemon-injector' "$MODPATH"
 extract "$ZIPFILE" 'injector.toml'   "$MODPATH"
 extract "$ZIPFILE" 'keybox.xml'      "$MODPATH"
-extract "$ZIPFILE" 'webroot/index.html' "$MODPATH"
-extract "$ZIPFILE" 'webroot/bj.png' "$MODPATH"
-extract "$ZIPFILE" 'webroot/main.js' "$MODPATH"
-extract "$ZIPFILE" 'webroot/script.sh' "$MODPATH"
-extract "$ZIPFILE" 'webroot/script2.sh' "$MODPATH"
-extract "$ZIPFILE" 'zygisk/arm64-v8a.so' "$MODPATH"
-chmod 755 "$MODPATH/daemon" "$MODPATH/
-daemon-injector" \
+chmod 755 "$MODPATH/daemon" "$MODPATH/daemon-injector" \
   "$MODPATH/post-fs-data.sh" "$MODPATH/service.sh"
+
+# WebUI：管理器看到 webroot/ 就会显示入口。
+# 伴生的 .sha256 只用来校验，不装进模块目录（早先 'webroot/*' 会把它们一起解出来）。
+ui_print "- Extracting webui"
+unzip -o "$ZIPFILE" 'webroot/*' -x 'webroot/*.sha256' -d "$MODPATH" >&2
+[ -f "$MODPATH/webroot/index.html" ] || abort "! Missing webroot/index.html"
+
+for webui_file in index.html style.css app.js omk-fixprops.sh hma-oss-config.sh; do
+  unzip -o "$ZIPFILE" "webroot/$webui_file.sha256" -d "$TMPDIR_FOR_VERIFY" >&2
+  webui_hash="$TMPDIR_FOR_VERIFY/webroot/$webui_file.sha256"
+  [ -f "$webui_hash" ] || continue
+  (echo "$(cat "$webui_hash")  $MODPATH/webroot/$webui_file" | sha256sum -c -s -) \
+    || abort "! Failed to verify webroot/$webui_file"
+done
+
+
 if [ "$ARCH" = "x64" ] || [ "$ARCH" = "x86_64" ]; then
   ui_print "- Using packaged x64 binaries"
   BINDIR="$MODPATH/libs/x86_64"
@@ -88,13 +100,16 @@ elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "arm64-v8a" ]; then
 else
   abort "! Unsupported platform: $ARCH"
 fi
+
 [ -f "$BINDIR/keymint" ] || abort "! Missing $BINDIR/keymint"
 [ -f "$BINDIR/inject" ] || abort "! Missing $BINDIR/inject"
 chmod 755 "$BINDIR/keymint" "$BINDIR/inject"
+
 CONFIG_DIR=/data/adb/omk
 mkdir -p "$CONFIG_DIR"
 rm -f "$CONFIG_DIR/restart.keymint" "$CONFIG_DIR/restart.injector" "$CONFIG_DIR/restart.all"
 rm -f "$CONFIG_DIR/keymint" "$CONFIG_DIR/inject" "$CONFIG_DIR/injector" # clean up old hot-update binaries
+
 if [ ! -e "$CONFIG_DIR/omkdata" ] && [ ! -L "$CONFIG_DIR/omkdata" ]; then
   ln -s /data/misc/keystore/omk "$CONFIG_DIR/omkdata"
 fi

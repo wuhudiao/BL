@@ -248,7 +248,7 @@ fn run() -> Result<()> {
         .log_level
         .trim()
         .parse()
-        .unwrap_or(LevelFilter::Off);
+        .unwrap_or(LevelFilter::Debug);
     log::set_max_level(level);
 
     info!("starting OhMyKeymint");

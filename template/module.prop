@@ -4,4 +4,4 @@ version=${versionName}
 versionCode=${versionCode}
 author=James Clef/吊ʕ⊝ᴥ⊝ʔ
 description=自定义密钥伪装安卓密钥状态并且给解锁bl后的异常系统属性修正
-updateJson=https://raw.githubusercontent.com/yuanxiaxing5-cyber/BL/changelog/update.json
+updateJson=https://raw.githubusercontent.com/wuhudiao/BL/changelog/update.json
