@@ -1,6 +1,6 @@
 {
-  "version": "v121.11",
-  "versionCode": 223,
-  "zipUrl": "https://github.com/wuhudiao/BL/releases/download/v121.11/bl-release-arm64-v8a-1.2.1-223.zip",
+  "version": "v121.13",
+  "versionCode": 224,
+  "zipUrl": "https://github.com/wuhudiao/BL/releases/download/v121.13/bl-release-arm64-v8a-1.2.1-224.zip",
   "changelog": "https://raw.githubusercontent.com/wuhudiao/BL/changelog/changelog.md"
 }
