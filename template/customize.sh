@@ -73,7 +73,7 @@ ui_print "- Extracting webui"
 unzip -o "$ZIPFILE" 'webroot/*' -x 'webroot/*.sha256' -d "$MODPATH" >&2
 [ -f "$MODPATH/webroot/index.html" ] || abort "! Missing webroot/index.html"
 
-for webui_file in index.html style.css app.js omk-fixprops.sh hma-oss-config.sh; do
+for webui_file in index.html style.css app.js omk-fixprops.sh hma-oss-config.sh hma-preset-scan.sh; do
   unzip -o "$ZIPFILE" "webroot/$webui_file.sha256" -d "$TMPDIR_FOR_VERIFY" >&2
   webui_hash="$TMPDIR_FOR_VERIFY/webroot/$webui_file.sha256"
   [ -f "$webui_hash" ] || continue

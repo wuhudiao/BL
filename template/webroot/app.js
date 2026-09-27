@@ -852,15 +852,225 @@ function openRemoteKeyboxDialog() {
 
 const HMA_SCRIPT_PATH = '/data/adb/ksu/hma-config.sh';
 const SCENE_PACKAGE = 'com.omarea.vtools';
+const HMA_ORIGINAL_PKG = 'com.tsng.hidemyapplist';
+const HMA_ORIGINAL_CONFIG = '/data/data/' + HMA_ORIGINAL_PKG + '/files/config.json';
+const HMA_ORIGINAL_TEMPLATE = '一件配置黑名单';
+const HMA_SCAN_SCRIPT_PATH = '/data/adb/ksu/hma-preset-scan.sh';
+const HMA_SCOPE_EXCLUDES = [
+  'eu.darken.sdmse',
+  'me.weishu.kernelsu',
+  'bin.mt.plus.canary',
+  'bin.mt.plus',
+  'org.telegram.messenger',
+  'org.telegram.group',
+  'me.bmax.apatch',
+  'org.frknkrc44.hma_oss',
+  HMA_ORIGINAL_PKG,
+];
+
+const HMA_PRESET_PACKAGES = [
+  'at.austriao.fake_gps_detector_app',
+  'at.or.at.plugoffairplane',
+  'at.persie0.root_detection_app',
+  'be.mygod.vpnhotspot',
+  'berserker.android.apps.sshdroid',
+  'by.sheerboy.femboydetector',
+  'ca.mudar.fairphone.peaceofmind',
+  'ccc71.st.cpu',
+  'cm.aptoide.pt',
+  'com.AndroLua',
+  'com.ahmed.security_tester',
+  'com.amaze.filemanager',
+  'com.android.nativetest',
+  'com.androidfung.drminfo',
+  'com.anycheck.app',
+  'com.anydesk.anydeskandroid',
+  'com.atominvention.rootchecker',
+  'com.bartixxx.opflashcontrol',
+  'com.bryancandi.knoxcheck',
+  'com.byxiaorun.detector',
+  'com.byyoung.setting',
+  'com.carriez.flutter_hbb',
+  'com.ceco.gravitybox.unlocker',
+  'com.corphish.nightlight.generic',
+  'com.detect.mt',
+  'com.devolutions.remotedesktopmanager',
+  'com.dexprotector.detector.envchecks',
+  'com.emanuelef.remote_capture',
+  'com.fkjc.zcro',
+  'com.flinkapps.safteynet',
+  'com.fox2code.mmm',
+  'com.franco.kernel',
+  'com.garyodernichts.downgrader',
+  'com.gitlab.giwiniswut.rwremount',
+  'com.happymod.apk',
+  'com.henrikherzig.playintegritychecker',
+  'com.hijacker',
+  'com.html6405.boefflakernelconfig',
+  'com.iamaner.oneclickfreeze',
+  'com.jhc.detach',
+  'com.joeykrim.rootcheck',
+  'com.js.nowakelock',
+  'com.kikyps.crackme',
+  'com.kimchangyoun.rootbeerFresh.sample',
+  'com.lingqing.detector',
+  'com.lonelycatgames.Xplore',
+  'com.longz.detector',
+  'com.lybxlpsv.kernelmanager',
+  'com.machiav3lli.backup',
+  'com.mayank.rucky',
+  'com.mrsep.ttlchanger',
+  'com.omarea.vtools',
+  'com.paget96.lsandroid',
+  'com.pd.pdhelper',
+  'com.rem01gaming.disclosure',
+  'com.reveny.nativecheck',
+  'com.reveny.vbmetafix.service',
+  'com.rk.taskmanager',
+  'com.rosan.dhizuku',
+  'com.rve.rvkernelmanager',
+  'com.shamanland.privatescreenshots',
+  'com.simo.fhook',
+  'com.slash.batterychargelimit',
+  'com.softwarebakery.drivedroid',
+  'com.speedsoftware.rootexplorer',
+  'com.suisho.rc',
+  'com.sunilpaulmathew.debloater',
+  'com.tester.wpswpatester',
+  'com.thend.integritychecker',
+  'com.tortel.syslog',
+  'com.umang96.radon',
+  'com.valhalla.thor',
+  'com.youhu.laifu',
+  'com.zhenxi.hunter',
+  'com.zinaro.cachecleanerwidget',
+  'de.buttercookie.simbadroid',
+  'de.srlabs.snoopsnitch',
+  'de.tu_darmstadt.seemoo.nexmon',
+  'eu.roggstar.getmitokens',
+  'eu.roggstar.luigithehunter.batterycalibrate',
+  'flar2.exkernelmanager',
+  'gr.nikolasspyr.integritycheck',
+  'icu.nullptr.applistdetector',
+  'icu.nullptr.nativetest',
+  'id.kuato.diskhealth',
+  'id.my.pjm.qbcd_okr_dvii',
+  'id.xms.xtrakernelmanager',
+  'io.chaldeaprjkt.gamespace',
+  'io.github.a13e300.ksuwebui',
+  'io.github.domi04151309.powerapp',
+  'io.github.huskydg.memorydetector',
+  'io.github.rabehx.securify',
+  'io.github.saeeddev94.pixelnr',
+  'io.github.vvb2060.mahoshojo',
+  'io.liankong.riskdetector',
+  'io.ngankbakaa.lineage.detector',
+  'james.dsp',
+  'krypton.tbsafetychecker',
+  'luna.safe.luna',
+  'mattecarra.accapp',
+  'me.itejo443.bindhosts',
+  'me.jsonet.jshook',
+  'me.twrp.twrpapp',
+  'me.zhanghai.android.files',
+  'org.adaway',
+  'org.akanework.checker',
+  'org.connectbot',
+  'org.csploit.android',
+  'org.fossify.filemanager',
+  'org.matrix.demo',
+  'org.nuntius35.wrongpinshutdown',
+  'powersaver.pro',
+  'remote.hid.keyboard.client',
+  'ru.evgeniy.dpitunnel',
+  'ru.nsu.bobrofon.easysshfs',
+  'simple.reboot.com',
+  'su.sniff.cepter',
+  'tk.giesecke.phoenix',
+  'ua.polodarb.gmsflags',
+  'ua.polodarb.gmsflags.reborn',
+  'web1n.stopapp',
+  'whid.usb.injector',
+  'wu.Rookie.Detector',
+  'wu.Zygisk.Detector',
+  'wu.keyChain.test',
+  'x1125io.initdlight',
+];
+const HMA_PRESET_RULES = [
+  ['contains', '.apatch.'],
+  ['contains', '.busybox'],
+  ['contains', 'chunqiu'],
+  ['contains', 'chuqniu'],
+  ['prefix', 'bin.mt.'],
+  ['prefix', 'co.aospa.'],
+  ['prefix', 'com.accents.'],
+  ['prefix', 'com.alpha.'],
+  ['prefix', 'com.android.system.switch.'],
+  ['prefix', 'com.android.systemui.'],
+  ['prefix', 'com.android.theme.'],
+  ['prefix', 'com.bootleggers.'],
+  ['prefix', 'com.caf.'],
+  ['prefix', 'com.custom.overlay.'],
+  ['prefix', 'com.dergoogler.mmrl'],
+  ['prefix', 'com.drdisagree.iconify'],
+  ['prefix', 'com.ghisler.'],
+  ['prefix', 'com.gnonymous.gvisualmod.'],
+  ['prefix', 'com.libremobileos.'],
+  ['prefix', 'com.microsoft.rdc.'],
+  ['prefix', 'com.mixplorer'],
+  ['prefix', 'com.nikgapps.'],
+  ['prefix', 'com.offsec.'],
+  ['prefix', 'com.potato.'],
+  ['prefix', 'com.realvnc.'],
+  ['prefix', 'com.smartpack.'],
+  ['prefix', 'com.teamviewer.'],
+  ['prefix', 'com.termux'],
+  ['prefix', 'com.x0.strai.'],
+  ['prefix', 'com.xayah.databackup'],
+  ['prefix', 'dev.ukanth.ufirewall'],
+  ['prefix', 'eu.xiaomi.'],
+  ['prefix', 'lineageos.'],
+  ['prefix', 'me.garfieldhan.'],
+  ['prefix', 'moe.shizuku.'],
+  ['prefix', 'moe.xzr.'],
+  ['prefix', 'nextapp.fx'],
+  ['prefix', 'org.calyxos.'],
+  ['prefix', 'org.evolution.'],
+  ['prefix', 'org.evolutionx.'],
+  ['prefix', 'org.fdroid.fdroid.privileged'],
+  ['prefix', 'org.lineageos.'],
+  ['prefix', 'org.lsposed'],
+  ['prefix', 'org.omnirom.'],
+  ['prefix', 'org.protonaosp.'],
+  ['prefix', 'ru.zdevs.'],
+  ['prefix', 'xzr.'],
+  ['suffix', '.apatch'],
+  ['suffix', '.duckdetector'],
+  ['suffix', '.evolution'],
+  ['suffix', '.evolutionx'],
+  ['suffix', '.keyattestation'],
+  ['suffix', '.magisk'],
+  ['suffix', '.overlay.fog'],
+  ['suffix', '.viper4android'],
+  ['suffix', '.viperfx'],
+];
 
 function renderHideApp() {
   page.replaceChildren();
-  page.appendChild(group(null, [{
-    icon: 'visibilityOff',
-    title: '一键配置隐藏应用列表',
-    summary: '为所有第三方应用写好 Hide My Applist 配置并让其重读',
-    onClick: () => showHideAppPhase('pick', ''),
-  }]));
+  page.appendChild(group(null, [
+    {
+      icon: 'visibilityOff',
+      title: '一键配置隐藏应用列表',
+      summary: '为所有第三方应用写好 Hide My Applist 配置并让其重读',
+      onClick: () => showHideAppPhase('pick', ''),
+    },
+    {
+      icon: 'visibilityOff',
+      title: '一键配置隐藏应用列表（原版）',
+      summary: '给原版 HMA 写「一件配置黑名单」模板（预设包名）并加进所有第三方应用的范围',
+      onClick: () => showOriginalPhase('pick', ''),
+    },
+  ]));
 }
 
 async function detectManagerPackage() {
@@ -944,6 +1154,165 @@ async function startHideApp(scene) {
   }
   if (route !== 'hideapp') return;
   showHideAppPhase('done', text);
+}
+
+
+function matchesPreset(pkg) {
+  if (HMA_PRESET_PACKAGES.indexOf(pkg) >= 0) return true;
+  return HMA_PRESET_RULES.some((rule) => (
+    rule[0] === 'prefix' ? pkg.startsWith(rule[1])
+      : rule[0] === 'suffix' ? pkg.endsWith(rule[1])
+        : pkg.indexOf(rule[1]) >= 0
+  ));
+}
+
+async function presetBlacklist() {
+  const listed = await softSh('pm list packages 2>/dev/null');
+  if (!listed.trim()) throw new Error('读不到已安装应用列表（pm list packages 没输出）');
+  return listed.split('\n')
+    .map((line) => line.replace(/^package:/, '').trim())
+    .filter((pkg) => pkg && matchesPreset(pkg))
+    .sort();
+}
+
+async function presetCachePackages() {
+  const file = (await softSh('ls -1 /data/misc/hide_my_applist_*/preset_cache_v2.json 2>/dev/null | head -1')).trim();
+  if (!file) return [];
+  const raw = (await softSh('cat ' + quoteShell(file) + ' 2>/dev/null')).trim();
+  try {
+    const parsed = JSON.parse(raw);
+    const out = [];
+    Object.keys(parsed.cache || {}).forEach((name) => {
+      (parsed.cache[name] || []).forEach((pkg) => { if (typeof pkg === 'string') out.push(pkg); });
+    });
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+async function softSh(command) {
+  const result = await shRaw(command);
+  return result.out || '';
+}
+
+async function presetScanPackages() {
+  const response = await fetch('hma-preset-scan.sh');
+  if (!response.ok) throw new Error('读不到 hma-preset-scan.sh（HTTP ' + response.status + '）');
+  const script = await response.text();
+  const wrote = await sh(
+    "printf '%s' " + quoteShell(b64utf8(script)) + ' | base64 -d > ' + HMA_SCAN_SCRIPT_PATH + ' || exit 1\n' +
+    'chmod 700 ' + HMA_SCAN_SCRIPT_PATH + '\necho ok'
+  );
+  if (!wrote.includes('ok')) throw new Error('写入 ' + HMA_SCAN_SCRIPT_PATH + ' 失败');
+  const out = await softSh('sh ' + HMA_SCAN_SCRIPT_PATH);
+  return out.split('\n').map((line) => line.trim())
+    .filter((pkg) => /^[A-Za-z][A-Za-z0-9_.]*$/.test(pkg));
+}
+
+function originalScopeEntry(template) {
+  const entry = Object.assign({
+    aggressiveFilter: true, useWhitelist: false, excludeSystemApps: true,
+    applyTemplates: [], extraAppList: [],
+  });
+  entry.applyTemplates = [template];
+  return entry;
+}
+
+function buildOriginalConfig(apps, blacklist) {
+  const config = {
+    configVersion: 93, detailLog: false, maxLogSize: 512,
+    forceMountData: true, aggressiveFilter: false,
+    templates: { [HMA_ORIGINAL_TEMPLATE]: { isWhitelist: false, appList: blacklist } },
+    scope: {},
+  };
+  apps.forEach((pkg) => {
+    config.scope[pkg] = originalScopeEntry(HMA_ORIGINAL_TEMPLATE);
+  });
+  return { config, total: Object.keys(config.scope).length, blacklist: blacklist.length };
+}
+
+async function runOriginalHideAppList() {
+  const count = async (command) => Number((await softSh(command + ' 2>/dev/null')).trim()) || 0;
+  if (!await count('pm list packages | grep -c "^package:' + HMA_ORIGINAL_PKG + '$"')) {
+    throw new Error('未安装原版 HMA（' + HMA_ORIGINAL_PKG + '）');
+  }
+
+  const manager = await detectManagerPackage();
+  const staticHits = await presetBlacklist();
+  const scannedHits = await presetScanPackages();
+  const cachedHits = await presetCachePackages();
+  const merged = Array.from(new Set(staticHits.concat(scannedHits, cachedHits))).sort();
+  if (!merged.length) throw new Error('预设一个包名都没命中，检查一下 pm 命令是否可用');
+
+  const apps = (await listApps()).map((app) => app.pkg)
+    .filter((pkg) => pkg && HMA_SCOPE_EXCLUDES.indexOf(pkg) < 0 && pkg !== manager);
+  const built = buildOriginalConfig(apps, merged);
+  const json = JSON.stringify(built.config);
+  JSON.parse(json);
+
+  const uid = (await softSh('stat -c %u /data/data/' + HMA_ORIGINAL_PKG + ' 2>/dev/null')).trim() || KEYSTORE_UID;
+  const existed = (await softSh('ls ' + HMA_ORIGINAL_CONFIG + ' 2>/dev/null')).trim();
+  if (existed) await sh('cp -a ' + HMA_ORIGINAL_CONFIG + ' ' + HMA_ORIGINAL_CONFIG + '.bak');
+  await softSh('am force-stop ' + HMA_ORIGINAL_PKG);
+  await sh('rm -f ' + HMA_ORIGINAL_CONFIG);
+  await writeFile(HMA_ORIGINAL_CONFIG, json, '600', uid || KEYSTORE_UID);
+
+  const written = await softSh('cat ' + HMA_ORIGINAL_CONFIG + ' 2>/dev/null');
+  let check;
+  try {
+    check = JSON.parse(written);
+  } catch (e) {
+    throw new Error('写入后读回失败（' + HMA_ORIGINAL_CONFIG + ' 读不到或不是 JSON）：' + written.slice(0, 120));
+  }
+  if (!check.templates || !check.templates[HMA_ORIGINAL_TEMPLATE]) throw new Error('写入后自检没过：模板不见了');
+  if (Object.keys(check.scope).length !== built.total) throw new Error('写入后自检没过：范围条目数不对');
+
+  await softSh('input keyevent KEYCODE_WAKEUP > /dev/null 2>&1; am start -n ' + HMA_ORIGINAL_PKG +
+    '/.MainActivityLauncher > /dev/null 2>&1; sleep 2; timeout 5 input keyevent 4');
+
+  return '模板「' + HMA_ORIGINAL_TEMPLATE + '」' + check.templates[HMA_ORIGINAL_TEMPLATE].appList.length +
+    ' 个包名；范围 ' + built.total + ' 个应用；旧配置已删并备份成 config.json.bak';
+}
+
+function showOriginalPhase(phase, text) {
+  const body = el('div');
+  if (phase === 'pick') {
+    body.appendChild(el('div', 'dialog-text',
+      '给原版 HMA 写「' + HMA_ORIGINAL_TEMPLATE + '」模板，并把三方应用加进范围。'));
+  } else if (phase === 'running') {
+    body.appendChild(el('div', 'dialog-text', '正在扫描已安装应用并写入原版 HMA 的配置（10~30 秒）…'));
+  } else {
+    body.appendChild(el('div', 'dialog-text', text || '已完成'));
+  }
+
+  const actions = [];
+  if (phase === 'pick') {
+    actions.push(actionButton('写入', () => startOriginalHideApp(), true));
+    actions.push(actionButton('取消', closeDialog));
+  } else if (phase === 'done') {
+    actions.push(actionButton('确定', closeDialog));
+  }
+
+  openDialog({
+    title: '一键配置隐藏应用列表（原版）',
+    body,
+    fillActions: phase === 'pick',
+    dismissable: phase !== 'running',
+    actions,
+  });
+}
+
+async function startOriginalHideApp() {
+  showOriginalPhase('running', '');
+  let text;
+  try {
+    text = await runOriginalHideAppList();
+  } catch (e) {
+    text = (e && e.message) ? e.message : String(e);
+  }
+  if (route !== 'hideapp') return;
+  showOriginalPhase('done', text);
 }
 
 
