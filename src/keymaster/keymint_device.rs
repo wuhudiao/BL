@@ -18,6 +18,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, OnceLock, RwLock,
 };
+use std::time::Duration;
 
 use crate::android::hardware::security::keymint::IKeyMintOperation::BnKeyMintOperation;
 use crate::android::hardware::security::keymint::{
@@ -534,6 +535,21 @@ fn begin_key_parameters_to_km(
     key_parameters_to_km(&filtered, version_number)
 }
 
+/// Wall clock one KeyMint call costs in the secure world.
+///
+/// A hardware KeyMint crosses into the secure world for every call, and a request that carries
+/// an attestation challenge additionally fetches an attestation key from the RKP backend. This
+/// backend does the same work in the normal world, so a caller it serves sees sub-millisecond
+/// replies that a hardware implementation cannot produce; that gap alone identifies a software
+/// keystore. Charge the modeled cost where the real crossing happens, before the request touches
+/// any state, so the store-then-reply ordering stays sequential.
+const SECURE_WORLD_OPERATION_COST: Duration = Duration::from_millis(12);
+const SECURE_WORLD_ATTESTATION_CHALLENGE_COST: Duration = Duration::from_millis(14);
+
+fn charge_secure_world(cost: Duration) {
+    std::thread::sleep(cost);
+}
+
 #[allow(non_snake_case)]
 impl IKeyMintDevice for KeyMintWrapper {
     fn begin(
@@ -543,6 +559,7 @@ impl IKeyMintDevice for KeyMintWrapper {
         params: &[KeyParameter],
         auth_token: Option<&HardwareAuthToken>,
     ) -> Result<crate::android::hardware::security::keymint::BeginResult::BeginResult, Status> {
+        charge_secure_world(SECURE_WORLD_OPERATION_COST);
         let version_number = resolve_hardware_profile(self.security_level).version_number;
         let km_params = begin_key_parameters_to_km(params, version_number)
             .map_err(key_parameter_conversion_status)?;
@@ -628,6 +645,16 @@ impl IKeyMintDevice for KeyMintWrapper {
     ) -> rsbinder::status::Result<
         crate::android::hardware::security::keymint::KeyCreationResult::KeyCreationResult,
     > {
+        charge_secure_world(
+            if keyParams
+                .iter()
+                .any(|param| param.r#tag == Tag::ATTESTATION_CHALLENGE)
+            {
+                SECURE_WORLD_OPERATION_COST + SECURE_WORLD_ATTESTATION_CHALLENGE_COST
+            } else {
+                SECURE_WORLD_OPERATION_COST
+            },
+        );
         let version_number = resolve_hardware_profile(self.security_level).version_number;
         let key_parameters = key_parameters_to_km(keyParams, version_number)
             .map_err(key_parameter_conversion_status)?;
