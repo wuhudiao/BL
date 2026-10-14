@@ -312,7 +312,10 @@ async function readFile(path) {
 
 async function writeFile(path, content, mode = '600', uid = KEYSTORE_UID) {
   const encoded = b64utf8(content);
+  const dir = path.replace(/\/[^/]*$/, '');
   const script = [
+    // KernelSU/Magisk 不保证 service.d、ksu 这些目录已存在
+    'mkdir -p ' + dir + ' 2>/dev/null',
     'if [ -f ' + path + ' ]; then cp -a ' + path + ' ' + path + '.new; else : > ' + path + '.new; fi',
     "printf '%s' " + quoteShell(encoded) + ' | base64 -d > ' + path + '.new || exit 1',
     'chown ' + uid + ':' + uid + ' ' + path + '.new 2>/dev/null',
