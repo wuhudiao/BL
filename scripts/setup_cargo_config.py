@@ -114,11 +114,25 @@ def render_config(ndk_root: Path, host_tag: str, api_level: int) -> str:
             "",
             "[target.aarch64-linux-android]",
             f"linker = {toml_string(str(aarch64_clang))}",
-            'rustflags = ["-C", "link-arg=-lc++abi"]',
+            "# `file!()` is embedded in the KeyMint error text that reaches callers",
+            "# (src/macros.rs). Built from this repository that text names the implementation",
+            "# family, so build every source path in the layout a vendor keystore2 build has.",
+            "# rustc applies the LAST prefix that matches, so the broad rules come first and",
+            "# src/keymaster flattens onto .../keystore2/src to leave security_level.rs directly",
+            "# under it. src/keymaster/utils.rs is the one name that also exists at src/, so it",
+            "# gets its own target; without that rule both files share one path and the crate",
+            "# stops compiling.",
+            'rustflags = ["-C", "link-arg=-lc++abi", '
+            '"--remap-path-prefix=src=system/security/keystore2/src", '
+            '"--remap-path-prefix=src/keymaster=system/security/keystore2/src", '
+            '"--remap-path-prefix=src/keymaster/utils.rs=system/security/keystore2/src/keymaster_utils.rs"]',
             "",
             "[target.x86_64-linux-android]",
             f"linker = {toml_string(str(x86_64_clang))}",
-            'rustflags = ["-C", "link-arg=-lc++abi"]',
+            'rustflags = ["-C", "link-arg=-lc++abi", '
+            '"--remap-path-prefix=src=system/security/keystore2/src", '
+            '"--remap-path-prefix=src/keymaster=system/security/keystore2/src", '
+            '"--remap-path-prefix=src/keymaster/utils.rs=system/security/keystore2/src/keymaster_utils.rs"]',
             "",
             "[env]",
             'BORINGSSL_RUST_CPPLIB = { value = "c++_static", force = true }',

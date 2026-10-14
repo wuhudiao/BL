@@ -44,6 +44,12 @@ BINARY_SPECS = (
     {"package": "injector", "bin": "inject", "output_name": "inject"},
 )
 
+# Source-layout markers a shipped binary must carry and must not carry. Vendor keystore2 error
+# chains name `system/security/keystore2/src/security_level.rs`; this repository builds as
+# `src/keymaster/security_level.rs` unless the --remap-path-prefix flags apply.
+VENDOR_KEYSTORE_MARKER = b"system/security/keystore2/src/security_level.rs"
+OMK_LAYOUT_MARKER = b"src/keymaster/"
+
 REQUIRED_TEMPLATE_FILES = (
     "customize.sh",
     "daemon",
@@ -108,6 +114,28 @@ def cargo_env_for_target(target: str) -> dict[str, str]:
         if boring_dir and boring_dir.exists():
             env["BORINGSSL_BUILD_DIR"] = os.fspath(boring_dir)
     return env
+
+
+def verify_vendor_paths(binary: Path, *, expect_vendor_prefix: bool) -> None:
+    """Fail the package when a shipped binary names this repository's source layout.
+
+    KeyMint error chains embed `file!()` (see src/macros.rs) and that text reaches the caller, so
+    a binary built without the --remap-path-prefix flags from .cargo/config.toml identifies this
+    implementation to attestation diagnostics. Nothing in review or in the test suite notices
+    that, so make it a build error instead.
+    """
+    content = binary.read_bytes()
+    if OMK_LAYOUT_MARKER in content:
+        raise RuntimeError(
+            f"{binary.name} contains {OMK_LAYOUT_MARKER.decode()!r}; regenerate "
+            ".cargo/config.toml with scripts/setup_cargo_config.py so the "
+            "--remap-path-prefix flags are present"
+        )
+    if expect_vendor_prefix and VENDOR_KEYSTORE_MARKER not in content:
+        raise RuntimeError(
+            f"{binary.name} contains no {VENDOR_KEYSTORE_MARKER.decode()!r}; the "
+            "--remap-path-prefix flags did not apply to this build"
+        )
 
 
 def build_binary(
@@ -290,8 +318,10 @@ def build_package_for_abi(
         normalize_module_text_files(stage_dir)
         configure_template_for_abi(stage_dir, abi)
         for spec in BINARY_SPECS:
+            binary = built_binaries[spec["output_name"]]
+            verify_vendor_paths(binary, expect_vendor_prefix=spec["output_name"] == "keymint")
             copy_binary(
-                built_binaries[spec["output_name"]],
+                binary,
                 spec["output_name"],
                 abi,
                 stage_dir,
