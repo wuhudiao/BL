@@ -195,6 +195,37 @@ fn unconfirmed_grant_readback_stays_rejected() {
 }
 
 #[test]
+fn key_id_readback_after_grant_reaches_the_probe() {
+    let _guard = route_state_test_guard();
+    let decision = crate::filter::FilterDecision {
+        allowed: false,
+        reason: crate::filter::FilterReason::RejectedUnknownPackage,
+        packages: Vec::new(),
+    };
+    let caller = CallerInfo {
+        uid: 99004,
+        sid: String::new(),
+        pid: 2000,
+    };
+    let key = KeyDescriptor {
+        domain: Domain::KEY_ID,
+        nspace: 4242,
+        alias: None,
+        blob: None,
+    };
+
+    // A grantee may read by the key id the key entry reply handed out, so this descriptor
+    // shape has to reach the probe instead of falling through to the system service.
+    assert!(should_allow_omk_grant_service_request_with_probe(
+        &ParsedServiceRequest::GetKeyEntry { key },
+        &decision,
+        &caller,
+        |_, _| Ok(true),
+    )
+    .expect("KEY_ID grant lookup should succeed"));
+}
+
+#[test]
 fn soft_rejected_grant_probe_error_is_fail_closed() {
     let _guard = route_state_test_guard();
     let grant = KeyDescriptor {

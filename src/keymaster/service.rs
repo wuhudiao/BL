@@ -598,7 +598,10 @@ impl KeystoreService {
     }
 
     fn is_omk_grant(&self, ctx: Option<&CallerInfo>, grant: &KeyDescriptor) -> Result<bool> {
-        if grant.domain != Domain::GRANT {
+        // A grant is reachable through either descriptor shape: {GRANT, grantId}, or the
+        // {KEY_ID, keyId} the key entry reply handed out. `load_key_entry` resolves the KEY_ID
+        // shape by looking the caller up in the grant table, which is the same rule AOSP uses.
+        if !matches!(grant.domain, Domain::GRANT | Domain::KEY_ID) {
             return Ok(false);
         }
 

@@ -153,7 +153,11 @@ fn should_allow_omk_grant_descriptor_with_probe(
         return Ok(false);
     }
 
-    if grant.domain != Domain::GRANT {
+    // AOSP resolves a post-grant read through either descriptor shape: {GRANT, grantId}, or the
+    // {KEY_ID, keyId} its own key entry reply handed out (`load_access_tuple`'s KEY_ID branch
+    // consults the grant table). Both shapes must reach the probe, otherwise the shape that is
+    // not probed falls through to System, which does not know the grant.
+    if !matches!(grant.domain, Domain::GRANT | Domain::KEY_ID) {
         return Ok(false);
     }
 
