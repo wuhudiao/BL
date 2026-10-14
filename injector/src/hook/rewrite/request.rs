@@ -80,6 +80,28 @@ pub(in crate::hook) unsafe fn handle_br_transaction(
     if !is_known_keystore_interface(&request_interface) {
         return false;
     }
+    // `enforceInterface` runs before an AOSP stub dispatches, so the node that received this
+    // transaction decides which interface is legitimate, not the token alone. Leaving a
+    // disagreement to the System reproduces the rejection a clean device produces.
+    let request_target = LocalBinderTarget {
+        ptr: tr.target.ptr,
+        cookie: tr.cookie,
+    };
+    if request_target.ptr != 0
+        && !tracker::interface_matches_target(request_target, &request_interface)
+    {
+        warn!(
+            "event=decision command={} code=0x{:x} uid={} pid={} carries interface token '{}' but target ptr:0x{:x}/cookie:0x{:x} serves another interface; routing request to System",
+            command_name,
+            tr.code,
+            tr.sender_euid,
+            tr.sender_pid,
+            request_interface,
+            request_target.ptr,
+            request_target.cookie,
+        );
+        return false;
+    }
     let caller = CallerInfo {
         uid: i64::from(tr.sender_euid.max(0)),
         sid: caller_sid.unwrap_or_default(),
