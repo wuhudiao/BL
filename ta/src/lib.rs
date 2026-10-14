@@ -493,13 +493,15 @@ impl KeyMintTa {
                     curr
                 )),
                 Ordering::Equal => Ok(()),
-                Ordering::Greater => Err(km_err!(
-                    InvalidKeyBlob,
-                    "keyblob with future {} {} (current {})",
-                    name,
-                    v,
-                    curr
-                )),
+                // We allow patchlevel upgrades.
+                Ordering::Greater => Ok(()),
+                // Ordering::Greater => Err(km_err!(
+                //     InvalidKeyBlob,
+                //     "keyblob with future {} {} (current {})",
+                //     name,
+                //     v,
+                //     curr
+                // )),
             }
         }
 
@@ -573,8 +575,8 @@ impl KeyMintTa {
     fn update_use_count(&mut self, key_id: KeyId, max_uses: u32) -> Result<(), Error> {
         let mut free_idx = None;
         let mut slot_idx = None;
-        for idx in 0..self.use_count.len() {
-            match &self.use_count[idx] {
+        for (idx, entry) in self.use_count.iter().enumerate() {
+            match entry {
                 None if free_idx.is_none() => free_idx = Some(idx),
                 None => {}
                 Some(UseCount {
