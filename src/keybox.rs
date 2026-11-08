@@ -102,7 +102,16 @@ impl KeyBox {
 
         let ec_entry = ec_entry.context("missing EC key entry in keybox.xml")?;
 
-        let rsa_info = rsa_entry.map(Self::build_rsa_info).transpose()?;
+        // Keybox files in the wild often repeat the EC entry under `algorithm="rsa"` or
+        // otherwise damage the RSA block. Drop an RSA entry that cannot be used instead of
+        // rejecting the whole file: EC-only mode signs RSA attestations with the EC key.
+        let rsa_info = match rsa_entry.map(Self::build_rsa_info).transpose() {
+            Ok(rsa_info) => rsa_info,
+            Err(error) => {
+                warn!("ignoring unusable RSA key entry in keybox.xml: {error:#}");
+                None
+            }
+        };
         let ec_info = Self::build_ec_info(ec_entry)?;
         let identity_digest = Self::compute_identity_digest(rsa_info.as_ref(), &ec_info)?;
 
@@ -696,7 +705,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_mismatched_private_key_and_certificate_chain() {
+    fn drops_unusable_rsa_entry_instead_of_rejecting_the_keybox() {
         let keybox = KeyBox::from_xml_str(BUNDLED_KEYBOX_XML).unwrap();
         let rsa_cert = encode_pem_block(
             "CERTIFICATE",
@@ -704,7 +713,12 @@ mod tests {
         );
         let ec_cert = encode_pem_block("CERTIFICATE", &keybox.ec_info.chain[0].encoded_certificate);
         let modified_xml = BUNDLED_KEYBOX_XML.replacen(&rsa_cert, &ec_cert, 1);
-        assert!(KeyBox::from_xml_str(&modified_xml).is_err());
+
+        // The RSA chain no longer matches its private key, so the entry is dropped and the
+        // keybox keeps working with EC signing for RSA-hinted attestations.
+        let parsed = KeyBox::from_xml_str(&modified_xml).unwrap();
+        assert!(parsed.rsa_info.is_none());
+        assert_eq!(parsed.ec_info.chain.len(), 2);
     }
 
     #[test]
