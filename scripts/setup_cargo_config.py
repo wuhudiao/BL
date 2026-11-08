@@ -122,19 +122,18 @@ def render_config(ndk_root: Path, host_tag: str, api_level: int) -> str:
             "# under it. src/keymaster/utils.rs is the one name that also exists at src/, so it",
             "# gets its own target; without that rule both files share one path and the crate",
             "# stops compiling.",
-            'rustflags = ["-C", "link-arg=-lc++abi", '
-            '"--remap-path-prefix=src=system/security/keystore2/src", '
+            'rustflags = ["--remap-path-prefix=src=system/security/keystore2/src", '
             '"--remap-path-prefix=src/keymaster=system/security/keystore2/src", '
             '"--remap-path-prefix=src/keymaster/utils.rs=system/security/keystore2/src/keymaster_utils.rs"]',
             "",
             "[target.x86_64-linux-android]",
             f"linker = {toml_string(str(x86_64_clang))}",
-            'rustflags = ["-C", "link-arg=-lc++abi", '
-            '"--remap-path-prefix=src=system/security/keystore2/src", '
+            'rustflags = ["--remap-path-prefix=src=system/security/keystore2/src", '
             '"--remap-path-prefix=src/keymaster=system/security/keystore2/src", '
             '"--remap-path-prefix=src/keymaster/utils.rs=system/security/keystore2/src/keymaster_utils.rs"]',
             "",
             "[env]",
+            'LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_BATCH_ATOMIC_WRITE -Dfdatasync=fdatasync"',
             'BORINGSSL_RUST_CPPLIB = { value = "c++_static", force = true }',
             f"CC_aarch64_linux_android = {toml_string(str(aarch64_clang))}",
             f"CXX_aarch64_linux_android = {toml_string(str(aarch64_clangxx))}",
@@ -162,7 +161,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--api-level",
         type=int,
-        default=26,
+        default=33,
         help="Android API level embedded in clang wrapper names. Default: 26.",
     )
     parser.add_argument(

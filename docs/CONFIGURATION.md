@@ -38,9 +38,9 @@ not identical:
 
 - A valid `injector.toml` is applied to new requests without a reboot.
 - A valid `config.toml` is read automatically, but only the four patch-level
-  fields and the biometric compatibility switch can take full effect without
-  restarting keymint. The field reference below states when a restart is
-  required.
+  fields, the biometric compatibility switch, and the keybox-retirement switch
+  can take full effect without restarting keymint. The field reference below
+  states when a restart is required.
 - A malformed file saved while its component is running is rejected and the
   last valid in-memory configuration remains active.
 - A malformed `config.toml` present when keymint starts prevents keymint from
@@ -70,8 +70,8 @@ examples; keep the values from the active file unless the reported identity
 needs to change.
 
 ```toml
-# Configuration format. Keep this at 2.
-version = 2
+# Configuration format. Keep this at 3.
+version = 3
 
 [main]
 # The supported service connection. Keep this value unchanged.
@@ -80,6 +80,8 @@ backend = "injector"
 log_level = "debug"
 # Insecure biometric compatibility switch. Keep false for normal use.
 force_skip_system_biometric_hat_verification = false
+# Delete client keys created under a previous keybox identity. On by default.
+retire_stale_keybox_bound_keys = true
 
 [crypto]
 # Redacted placeholders only. Keep the generated 64-character values.
@@ -126,18 +128,9 @@ imei2 = ""
 #### `version`
 
 This identifies the configuration format. The supported value is the integer
-`2`. It is not an Android version or an OMK release number. Do not increment it;
+`3`. It is not an Android version or an OMK release number. Do not increment it;
 the current file should keep this value unchanged. Live reload rejects other
 values and keeps the last valid runtime configuration.
-
-At keymint startup, a missing `version` is treated as `0`. Versions `0` and `1`
-are migrated in place to `2` before the service starts, and `os_version` is set
-to `"auto"` so later Android upgrades are detected on the next keymint start.
-Startup also removes the obsolete `trust_record`. For version `0`, missing
-patch-level fields inherit the configured `security_patch`. Other configured
-and unknown values are preserved. Migration is not performed during live
-reload, so restart keymint to migrate an older file. An unsupported future
-version is never overwritten.
 
 ### `[main]`
 
@@ -167,6 +160,21 @@ Keep it `false` unless a maintainer is diagnosing a confirmed device-specific
 problem. It does not hide root and is not a general fix for fingerprint or
 lock-screen failures. A valid save applies to new checks without restarting
 keymint.
+
+#### `retire_stale_keybox_bound_keys`
+
+When `true`, changing the active `keybox.xml` deletes client keys that were
+created under the previous keybox identity and attested with that keybox. The
+default is `true`, so a keybox change never leaves keys bound to a stale
+identity.
+
+Set it to `false` only when replacing or rotating keybox material must keep
+existing keys usable. A keybox that rotates periodically with this disabled
+leaves every older key bound to an identity the active keybox no longer
+provides.
+
+The value is read when keybox-bound retirement runs, so a saved change applies
+to the next keybox reload or keymint restart.
 
 ### `[crypto]`
 
@@ -493,11 +501,20 @@ rejects one of the packages in the group. Adding or removing a package does not
 move or convert keys between System and OMK; an app may lose access to keys it
 created through the other route.
 
-There is one narrow granted-key exception. An app outside `scoop`, or one whose
-package name cannot be resolved, can still use a key-access grant that OMK
-confirms belongs to an OMK key. This keeps a key deliberately shared by another
-app usable without giving the receiving app general OMK access. Android-blocked
-and deny-listed callers do not receive this exception.
+Key descriptors, including `KEY_ID` and `GRANT`, do not change the selected
+backend. A caller must pass the filter and enable the relevant intercept route
+to use OMK, including when using a key shared by another app.
+
+Isolated and app-zygote processes use their host application's package identity
+for scoop and deny-list decisions. The host is resolved from ActivityManager's
+process records and checked against the caller's PID and isolated UID for each
+request. SDK sandbox processes, and PCC processes on Android 17, use Android's
+host-UID mapping for the same filtering decision.
+
+The original caller UID, PID, and SID are preserved for key access checks.
+An isolated process still needs a grant to use its host's keys; host membership
+does not confer key ownership. If the host cannot be resolved, the existing
+`allow_unknown_package` policy applies. Holding a grant does not bypass scoop.
 
 ### `[main]`
 
@@ -535,10 +552,6 @@ With the filter enabled, OMK evaluates a caller in this order:
 
 This order matters for packages that share an Android identity: a deny rule
 wins over a matching entry in `scoop`.
-
-After this normal filter decision, the narrow OMK-owned grant exception
-described under `scoop` can preserve access for an unknown or out-of-scope app.
-It does not override the Android-package block or `deny_packages`.
 
 #### `enabled`
 
@@ -586,9 +599,13 @@ allowed by the filter, `true` routes that operation to OMK and `false` leaves
 that operation on System. These switches do not migrate existing keys or make
 System-created key references usable by OMK.
 
-The OMK-owned grant exception is separate from ordinary package routing. A
-request carrying a confirmed OMK grant may return to OMK even when the
-receiving app is outside `scoop`, so the granted key remains usable.
+An operation selected for OMK returns its OMK result or an AOSP-compatible error.
+Before executing an OMK request ahead of System, the injector checks the native
+receiving Binder's descriptor and preserves the interface token's UTF-16 identity.
+Mismatched requests remain unchanged for the receiving service to reject. HIDL
+connections retain their existing hook coverage and are not queried as native Binders.
+Connection and transaction failures end the current request without retries or
+switching to System. A later independent request may establish a new connection.
 
 Keep all switches `true` for normal use. Mixing System and OMK operations for
 the same app can cause missing-key errors, inconsistent lists, or failed

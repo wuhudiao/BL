@@ -1,16 +1,3 @@
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::ffi::c_void;
-use std::mem::size_of;
-use std::ops::{Deref, DerefMut};
-use std::os::raw::c_int;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard, OnceLock};
-use std::time::Instant;
-
-use log::{debug, warn};
-use nix::unistd::Pid;
-
 use super::binder::{
     _ioc_dir, _ioc_nr, _ioc_size, binder_node_debug_info, binder_ptr_cookie,
     binder_transaction_data, binder_transaction_data_secctx, binder_transaction_data_sg,
@@ -21,8 +8,6 @@ use super::binder::{
     BR_FROZEN_REPLY_NR, BR_ONEWAY_SPAM_SUSPECT_NR, BR_REPLY_NR, BR_TRANSACTION_COMPLETE_CMD,
     BR_TRANSACTION_NR, BR_TRANSACTION_PENDING_FROZEN_NR, TF_ONE_WAY,
 };
-#[cfg(test)]
-use super::binder::{BC_FREE_BUFFER_CMD, BC_REPLY_CMD, BR_NOOP_CMD, BR_TRANSACTION_CMD};
 use super::rewrite::{
     abort_bc_reply, cancel_operation_publication_acquire_pending, clear_binder_fd_thread_state,
     clear_outbound_reply_buffers, commit_bc_reply, finish_operation_publication_probe,
@@ -30,30 +15,39 @@ use super::rewrite::{
     mark_operation_publication_acquire_committed, mark_operation_publication_acquire_pending,
     mark_operation_publication_completed, next_operation_publication_probe_deadline,
     operation_publication_acquire_is_pending, operation_publication_pending_acquire,
-    push_pending_frame, retire_binder_connection_publications,
-    retire_synthetic_operation_retirement, take_operation_publication_probe,
-    OperationPublicationProbe,
-};
-#[cfg(test)]
-use super::rewrite::{
-    bind_operation_publication_connection, finish_local_operation_publication,
-    register_operation_publication_for_test, route_state_test_guard,
+    pending_reply_has_trusted_payload, pending_reply_requires_payload, push_native_pending_frame,
+    retire_binder_connection_publications, retire_synthetic_operation_retirement,
+    take_operation_publication_probe, OperationPublicationProbe,
 };
 use super::{
     BinderFdToken, BinderStateKey, OLD_CLOSE, OLD_DUP, OLD_DUP2, OLD_DUP3, OLD_FCNTL,
     OLD_FDSAN_CLOSE, OLD_IOCTL,
 };
 use crate::hook::binder::{LocalBinderTarget, NativeBinderRetirement};
+use log::{debug, warn};
+use nix::unistd::Pid;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::ffi::c_void;
+use std::mem::size_of;
+use std::ops::{Deref, DerefMut};
+use std::os::raw::c_int;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard, OnceLock};
+use std::time::Instant;
 
-mod fd;
-mod ioctl;
-
+pub(in crate::hook) use fd::is_native_binder_connection;
 use fd::*;
 pub(super) use fd::{
     new_close, new_dup, new_dup2, new_dup3, new_fcntl, new_fdsan_close,
     start_operation_publication_worker, wake_operation_publication_worker,
 };
 pub(super) use ioctl::new_ioctl;
+
+mod fd;
+mod ioctl;
+#[cfg(test)]
+mod tests;
 
 struct PendingTransactionCompletion {
     is_reply: bool,
@@ -141,9 +135,7 @@ fn zeroed_buffer(size: usize) -> Result<Vec<u8>, c_int> {
 
 fn copy_process_buffer(address: usize, size: usize) -> Result<Vec<u8>, c_int> {
     let mut buffer = zeroed_buffer(size)?;
-    copy_from_process(address, &mut buffer)
-        .then_some(buffer)
-        .ok_or(libc::EFAULT)
+    copy_from_process(address, &mut buffer).then_some(buffer).ok_or(libc::EFAULT)
 }
 
 fn copy_process_c_string(address: usize) -> Option<String> {
@@ -221,22 +213,14 @@ fn retry_pending_ioctl_copyback(
             PendingReadCopyback::None => (PendingReadCopyback::None, true, None),
             PendingReadCopyback::Processed { address, data } => {
                 let copied = copy_to_process(address, &data);
-                (
-                    PendingReadCopyback::Processed { address, data },
-                    copied,
-                    None,
-                )
+                (PendingReadCopyback::Processed { address, data }, copied, None)
             }
             PendingReadCopyback::Unread { address, len } => match copy_process_buffer(address, len)
             {
                 Ok(mut data) => {
                     let effects = unsafe { ioctl::parse_read_buffer(fd, &mut data) };
                     let copied = copy_to_process(address, &data);
-                    (
-                        PendingReadCopyback::Processed { address, data },
-                        copied,
-                        Some(effects),
-                    )
+                    (PendingReadCopyback::Processed { address, data }, copied, Some(effects))
                 }
                 Err(_) => (PendingReadCopyback::Unread { address, len }, false, None),
             },
@@ -284,12 +268,7 @@ impl TransactionPayloadShadow {
         if !copy_from_process(original_offsets as usize, offset_bytes) {
             return None;
         }
-        Some(Self {
-            data,
-            offsets,
-            original_buffer,
-            original_offsets,
-        })
+        Some(Self { data, offsets, original_buffer, original_offsets })
     }
 
     unsafe fn install(&mut self, tr: &mut binder_transaction_data) {
@@ -337,9 +316,8 @@ fn retain_inbound_transaction_shadow(
 }
 
 fn publish_inbound_transaction_shadows(connection: BinderStateKey, shadows: &[usize]) {
-    let mut entries = INBOUND_TRANSACTION_SHADOWS
-        .lock()
-        .expect("inbound transaction shadow map poisoned");
+    let mut entries =
+        INBOUND_TRANSACTION_SHADOWS.lock().expect("inbound transaction shadow map poisoned");
     for shadow_buffer in shadows {
         if let Some(shadow) = entries.get_mut(&(connection, *shadow_buffer)) {
             if shadow.state == InboundTransactionShadowState::Staged {
@@ -361,21 +339,9 @@ fn inbound_transaction_original_buffer(
         .map(|shadow| shadow.payload.original_buffer)
 }
 
-#[cfg(test)]
-fn clear_inbound_transaction_shadows(connection: BinderStateKey) {
-    INBOUND_TRANSACTION_SHADOWS
-        .lock()
-        .expect("inbound transaction shadow map poisoned")
-        .retain(|(shadow_connection, _), _| *shadow_connection != connection);
-}
-
 impl PendingReadEffects {
     fn new(connection: BinderStateKey) -> Self {
-        Self {
-            connection,
-            staged_inbound_shadows: Vec::new(),
-            operation_acquires: Vec::new(),
-        }
+        Self { connection, staged_inbound_shadows: Vec::new(), operation_acquires: Vec::new() }
     }
 
     fn commit(&mut self) {
@@ -444,10 +410,7 @@ fn reset_current_thread_binder_state(connection: BinderStateKey) {
     let completions = PENDING_TRANSACTION_COMPLETIONS
         .with(|pending| pending.borrow_mut().remove(&connection))
         .unwrap_or_default();
-    for target in completions
-        .into_iter()
-        .filter_map(|completion| completion.operation_target)
-    {
+    for target in completions.into_iter().filter_map(|completion| completion.operation_target) {
         retire_synthetic_operation_retirement(target);
     }
     debug!("event=binder cleared stale thread state for connection={connection}");
@@ -483,15 +446,12 @@ fn cleanup_retired_current_thread_connections() {
         connections.extend(state.borrow().values().map(|token| token.connection));
     });
 
-    for connection in connections
-        .into_iter()
-        .filter(|connection| binder_connection_cleanup_ready(*connection))
+    for connection in
+        connections.into_iter().filter(|connection| binder_connection_cleanup_ready(*connection))
     {
         reset_current_thread_binder_state(connection);
         OBSERVED_BINDER_FD_TOKENS.with(|observed| {
-            observed
-                .borrow_mut()
-                .retain(|_, token| token.connection != connection);
+            observed.borrow_mut().retain(|_, token| token.connection != connection);
         });
     }
 }
@@ -514,13 +474,4 @@ fn synchronize_binder_fd_generation(fd: c_int) -> Result<BinderFdToken, BinderFd
         });
     }
     Ok(token)
-}
-
-#[cfg(test)]
-static SYNTHETIC_REPLY_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-#[cfg(test)]
-fn reset_binder_fd_for_test(fd: c_int) {
-    let retired = invalidate_binder_fd_token(binder_fd_token(fd));
-    forget_current_thread_binder_fd(fd, retired);
 }

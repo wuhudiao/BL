@@ -24,10 +24,7 @@ fn log_runtime_identity(role: &str) {
     let euid = unsafe { libc::geteuid() };
     let gid = unsafe { libc::getgid() };
     let egid = unsafe { libc::getegid() };
-    info!(
-        "runtime identity role={} uid={} euid={} gid={} egid={}",
-        role, uid, euid, gid, egid
-    );
+    info!("runtime identity role={} uid={} euid={} gid={} egid={}", role, uid, euid, gid, egid);
 }
 
 fn main() {
@@ -68,11 +65,9 @@ fn main() {
             identity.sha256,
             identity.elf,
         ),
-        Err(error) => error!(
-            "failed to describe keystore2 executable {}: {:#}",
-            target_path.display(),
-            error
-        ),
+        Err(error) => {
+            error!("failed to describe keystore2 executable {}: {:#}", target_path.display(), error)
+        }
     }
     let pid = Pid::from_raw(pid);
     match inject::inject_library(pid) {
@@ -109,10 +104,7 @@ pub extern "C" fn entry(handle: *const c_void) -> bool {
             .map(|path| path.display().to_string())
             .unwrap_or_else(|_| "<unknown>".to_string()),
     );
-    if let Err(error) = ipc::install_direct_rpc_session() {
-        error!("failed to initialize OMK RPC session: {error:#}");
-        return false;
-    }
+    ipc::ensure_process_state();
     if let Err(error) = hook::init_hook() {
         error!("failed to initialize binder ioctl hook: {error:#}");
         return false;

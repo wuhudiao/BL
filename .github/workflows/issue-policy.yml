@@ -1,0 +1,70 @@
+name: Issue policy
+
+on:
+  issues:
+    types: [opened, reopened]
+  push:
+    branches: [master]
+    paths:
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/scripts/issue-policy.cjs'
+      - '.github/workflows/issue-policy.yml'
+  pull_request:
+    paths:
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/scripts/issue-policy.cjs'
+      - '.github/workflows/issue-policy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event_name != 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check Issue policy
+        run: node .github/scripts/issue-policy.cjs
+
+  enforce:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: issue-policy-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Close issues that do not follow a form
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const validateIssue = require('./.github/scripts/issue-policy.cjs');
+            const params = { ...context.repo, issue_number: context.payload.issue.number };
+            const { data: issue } = await github.rest.issues.get(params);
+            if (issue.state !== 'open') return;
+
+            const errors = validateIssue(issue);
+            if (errors.length === 0) return;
+
+            const forms = `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/new/choose`;
+            const policy = `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/${context.payload.repository.default_branch}/docs/AI-Policy.md`;
+            await github.rest.issues.update({ ...params, state: 'closed', state_reason: 'not_planned' });
+            await github.rest.issues.createComment({
+              ...params,
+              body: [
+                'This issue was automatically closed because it does not follow a required Issue form.',
+                ...errors.map(error => `- ${error}`),
+                `Please use an [Issue form](${forms}), complete every required field and checkbox, and keep the title prefix.`,
+                `Do not use an LLM to create an issue or copy LLM-generated descriptions or phrasing. See the [AI policy](${policy}).`,
+                'After correcting the issue, you may reopen it for another check.',
+              ].join('\n\n'),
+            });

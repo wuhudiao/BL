@@ -7,6 +7,24 @@ full responsibility for every submitted change. AI-generated content must meet
 the same correctness, provenance, licensing, validation, and review standards
 as human-written work.
 
+## Issues must be written without LLMs
+
+Every issue must use an [Issue form](https://github.com/qwq233/OhMyKeymint/issues/new/choose)
+and be written by its submitter from firsthand observations. Do not use an LLM
+to create, draft, rewrite, or translate an issue. Do not directly copy
+LLM-generated descriptions or phrasing into an issue title or body. These
+rules apply to bug reports, feature requests, and questions; disclosing LLM use
+does not exempt an issue from the prohibition.
+
+The form requires confirmation of these rules. Issues missing the required
+title prefix, fields, or pre-submission confirmations are automatically closed.
+The automated check validates form compliance; it cannot establish whether
+text was written by an LLM. Maintainers may close issues that violate this
+policy even when they pass the automated check.
+
+Any issue written completely by LLMs, even that is a real bug or issue, will be
+ignored or given much lower priority.
+
 ## Disclosure is mandatory
 
 Every pull request must state either that no AI was used or disclose every AI

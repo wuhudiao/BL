@@ -1,8 +1,6 @@
 use std::{fs, path::PathBuf, process::Command, vec};
 
 fn main() {
-    println!("cargo:rustc-link-lib=static=c++_static");
-
     println!("cargo:rerun-if-changed=aidl");
     println!("cargo:rerun-if-changed=src/proto");
     println!("cargo:rerun-if-changed=build.rs");
@@ -24,9 +22,7 @@ fn main() {
         .join("\n");
 
     std::fs::write(&mod_file, mod_content).unwrap();
-    let _ = Command::new("rustfmt")
-        .args([&mod_file, &format!("{}/storage.rs", out_dir)])
-        .status();
+    let _ = Command::new("rustfmt").args([&mod_file, &format!("{}/storage.rs", out_dir)]).status();
 
     let mut aidl = rsbinder_aidl::Builder::new()
         .include_dir(PathBuf::from("aidl/android/system/keystore2"))

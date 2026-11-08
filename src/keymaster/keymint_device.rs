@@ -16,7 +16,7 @@
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, OnceLock, RwLock,
+    Mutex, OnceLock, RwLock,
 };
 use std::time::Duration;
 
@@ -131,9 +131,7 @@ pub(crate) fn extract_patchlevel(prop_value: &str) -> std::result::Result<u32, H
 
 /// Extract the boot patchlevel as either its raw wire value or YYYYMMDD.
 pub(crate) fn extract_boot_patchlevel(prop_value: &str) -> std::result::Result<u32, HalInfoError> {
-    prop_value
-        .parse::<u32>()
-        .or_else(|_| extract_patchlevel(prop_value))
+    prop_value.parse::<u32>().or_else(|_| extract_patchlevel(prop_value))
 }
 
 /// Generate HAL information from property values.
@@ -199,12 +197,7 @@ impl KeyMintDevice {
             .get_hardware_info()
             .context(err!("Failed to get hardware info"))?
             .version_number;
-        Ok(KeyMintDevice {
-            km_dev: wrapper,
-            version,
-            km_uuid,
-            security_level,
-        })
+        Ok(KeyMintDevice { km_dev: wrapper, version, km_uuid, security_level })
     }
 
     /// Get a [`KeyMintDevice`] for the given [`SecurityLevel`], return
@@ -225,8 +218,7 @@ impl KeyMintDevice {
     pub fn terminate_uuid(&mut self) -> Result<()> {
         DB.with(|db| {
             let mut db = db.borrow_mut();
-            db.terminate_uuid(&self.km_uuid.read().unwrap())
-                .context(err!("terminate_uuid failed"))
+            db.terminate_uuid(&self.km_uuid.read().unwrap()).context(err!("terminate_uuid failed"))
         })?;
 
         self.km_uuid = RwLock::new(Uuid::from(self.security_level));
@@ -345,15 +337,13 @@ impl KeyMintDevice {
             // If the key is associated with a different km instance
             // or if there is no blob metadata for some reason the key entry
             // is considered corrupted and needs to be replaced with a new one.
-            let key_blob = key_entry
-                .take_key_blob_info()
-                .and_then(|(key_blob, blob_metadata)| {
-                    if Some(*self.km_uuid.read().unwrap()) == blob_metadata.km_uuid().copied() {
-                        Some(key_blob)
-                    } else {
-                        None
-                    }
-                });
+            let key_blob = key_entry.take_key_blob_info().and_then(|(key_blob, blob_metadata)| {
+                if Some(*self.km_uuid.read().unwrap()) == blob_metadata.km_uuid().copied() {
+                    Some(key_blob)
+                } else {
+                    None
+                }
+            });
 
             if let Some(key_blob_vec) = key_blob {
                 let (key_characteristics, key_blob) = self
@@ -465,10 +455,8 @@ impl KeyMintDevice {
                 map_km_error(result)
             })
             .context(err!("Failed to begin operation."))?;
-        let operation: Strong<dyn IKeyMintOperation> = begin_result
-            .operation
-            .ok_or_else(Error::sys)
-            .context(err!("Operation missing"))?;
+        let operation: Strong<dyn IKeyMintOperation> =
+            begin_result.operation.ok_or_else(Error::sys).context(err!("Operation missing"))?;
         let _wp = wd::watch("KeyMintDevice::use_key_in_one_step: calling IKeyMintDevice::finish");
         map_km_error(operation.finish(Some(one_step.input), None, None, None, None))
             .context(err!("Failed to finish operation."))
@@ -482,9 +470,9 @@ pub struct OneStepKeyOperation<'a> {
     pub auth_token: Option<&'a HardwareAuthToken>,
     pub input: &'a [u8],
 }
-static KM_WRAPPER_STRONGBOX: OnceLock<Arc<KeyMintWrapperInner>> = OnceLock::new();
+static KM_WRAPPER_STRONGBOX: OnceLock<KeyMintWrapperInner> = OnceLock::new();
 
-static KM_WRAPPER_TEE: OnceLock<Arc<KeyMintWrapperInner>> = OnceLock::new();
+static KM_WRAPPER_TEE: OnceLock<KeyMintWrapperInner> = OnceLock::new();
 
 static KM_WRAPPER_LIFECYCLE: Mutex<()> = Mutex::new(());
 static EARLY_BOOT_ENDED: AtomicBool = AtomicBool::new(false);
@@ -492,11 +480,22 @@ static EARLY_BOOT_ENDED: AtomicBool = AtomicBool::new(false);
 #[derive(Clone)]
 pub struct KeyMintWrapper {
     security_level: SecurityLevel,
-    inner: Arc<KeyMintWrapperInner>,
+    inner: &'static KeyMintWrapperInner,
 }
 
 struct KeyMintWrapperInner {
     keymint: Mutex<KeyMintTa>,
+    auth_token_hmac_key: Option<kmr_common::crypto::hmac::Key>,
+    hardware_info: keymint::KeyMintHardwareInfo,
+}
+
+impl KeyMintWrapperInner {
+    fn execute(&self, req: PerformOpReq) -> PerformOpResponse {
+        let mut ta = self.keymint.lock().expect("KeyMint TA mutex poisoned");
+        let response = ta.process_req(req);
+        drop(ta);
+        response
+    }
 }
 
 impl Interface for KeyMintWrapper {}
@@ -568,13 +567,13 @@ impl IKeyMintDevice for KeyMintWrapper {
             purpose: kmr_wire::keymint::KeyPurpose::try_from(purpose.0)
                 .map_err(key_parameter_conversion_status)?,
             key_blob: key_blob.to_vec(),
-            params: km_params.clone(),
+            params: km_params,
             auth_token: auth_token.map(|at| at.to_km()).transpose().map_err(|_| {
                 Status::new_service_specific_error(ErrorCode::INVALID_ARGUMENT.0, None)
             })?,
         });
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result: InternalBeginResult = match result.rsp {
             Some(PerformOpRsp::DeviceBegin(rsp)) => rsp.ret,
             Some(_) => unreachable!("Unexpected response type"),
@@ -583,8 +582,6 @@ impl IKeyMintDevice for KeyMintWrapper {
 
         let operation = crate::keymaster::keymint_operation::KeyMintOperation::new(
             self.clone(),
-            result.challenge,
-            km_params,
             result.op_handle,
         );
         let operation = BnKeyMintOperation::new_binder(operation);
@@ -595,13 +592,11 @@ impl IKeyMintDevice for KeyMintWrapper {
             Status::new_service_specific_error(ErrorCode::UNKNOWN_ERROR.0, None)
         })?;
 
-        Ok(
-            crate::android::hardware::security::keymint::BeginResult::BeginResult {
-                operation: Some(operation),
-                challenge: result.challenge,
-                params: out_params,
-            },
-        )
+        Ok(crate::android::hardware::security::keymint::BeginResult::BeginResult {
+            operation: Some(operation),
+            challenge: result.challenge,
+            params: out_params,
+        })
     }
 
     fn getHardwareInfo(
@@ -610,29 +605,19 @@ impl IKeyMintDevice for KeyMintWrapper {
         crate::android::hardware::security::keymint::KeyMintHardwareInfo::KeyMintHardwareInfo,
         Status,
     > {
-        let hardware_info: keymint::KeyMintHardwareInfo = self
-            .inner
-            .keymint
-            .lock()
-            .unwrap()
-            .get_hardware_info()
-            .unwrap();
+        let hardware_info = self.inner.hardware_info.clone();
 
-        Ok(
-            crate::android::hardware::security::keymint::KeyMintHardwareInfo::KeyMintHardwareInfo {
-                securityLevel: SecurityLevel(hardware_info.security_level as i32),
-                versionNumber: hardware_info.version_number,
-                keyMintName: hardware_info.key_mint_name,
-                keyMintAuthorName: hardware_info.key_mint_author_name,
-                timestampTokenRequired: hardware_info.timestamp_token_required,
-            },
-        )
+        Ok(crate::android::hardware::security::keymint::KeyMintHardwareInfo::KeyMintHardwareInfo {
+            securityLevel: SecurityLevel(hardware_info.security_level as i32),
+            versionNumber: hardware_info.version_number,
+            keyMintName: hardware_info.key_mint_name,
+            keyMintAuthorName: hardware_info.key_mint_author_name,
+            timestampTokenRequired: hardware_info.timestamp_token_required,
+        })
     }
 
-    fn addRngEntropy(&self, data: &[u8]) -> rsbinder::status::Result<()> {
-        let req = PerformOpReq::DeviceAddRngEntropy(AddRngEntropyRequest {
-            data: data.to_vec(),
-        });
+    fn addRngEntropy(&self, data: &[u8]) -> rsbinder::BinderResult<()> {
+        let req = PerformOpReq::DeviceAddRngEntropy(AddRngEntropyRequest { data: data.to_vec() });
         self.process_status_only(req).map_err(map_ks_error)
     }
 
@@ -642,14 +627,11 @@ impl IKeyMintDevice for KeyMintWrapper {
         attestation_key: Option<
             &crate::android::hardware::security::keymint::AttestationKey::AttestationKey,
         >,
-    ) -> rsbinder::status::Result<
+    ) -> rsbinder::BinderResult<
         crate::android::hardware::security::keymint::KeyCreationResult::KeyCreationResult,
     > {
         charge_secure_world(
-            if keyParams
-                .iter()
-                .any(|param| param.r#tag == Tag::ATTESTATION_CHALLENGE)
-            {
+            if keyParams.iter().any(|param| param.r#tag == Tag::ATTESTATION_CHALLENGE) {
                 SECURE_WORLD_OPERATION_COST + SECURE_WORLD_ATTESTATION_CHALLENGE_COST
             } else {
                 SECURE_WORLD_OPERATION_COST
@@ -674,7 +656,7 @@ impl IKeyMintDevice for KeyMintWrapper {
             key_params: key_parameters,
             attestation_key,
         });
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::DeviceGenerateKey(rsp)) => rsp.ret,
             Some(_) => unreachable!("Unexpected response type"),
@@ -692,7 +674,7 @@ impl IKeyMintDevice for KeyMintWrapper {
         attestation_key: Option<
             &crate::android::hardware::security::keymint::AttestationKey::AttestationKey,
         >,
-    ) -> rsbinder::status::Result<
+    ) -> rsbinder::BinderResult<
         crate::android::hardware::security::keymint::KeyCreationResult::KeyCreationResult,
     > {
         let version_number = resolve_hardware_profile(self.security_level).version_number;
@@ -719,7 +701,7 @@ impl IKeyMintDevice for KeyMintWrapper {
             key_data: key_data.to_vec(),
             attestation_key,
         });
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::DeviceImportKey(rsp)) => rsp.ret,
             Some(_) => unreachable!("Unexpected response type"),
@@ -737,7 +719,7 @@ impl IKeyMintDevice for KeyMintWrapper {
         unwrapping_params: &[crate::android::hardware::security::keymint::KeyParameter::KeyParameter],
         password_sid: i64,
         biometric_sid: i64,
-    ) -> rsbinder::status::Result<
+    ) -> rsbinder::BinderResult<
         crate::android::hardware::security::keymint::KeyCreationResult::KeyCreationResult,
     > {
         let version_number = resolve_hardware_profile(self.security_level).version_number;
@@ -753,14 +735,11 @@ impl IKeyMintDevice for KeyMintWrapper {
             biometric_sid,
         });
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::DeviceImportWrappedKey(rsp)) => rsp.ret,
             Some(_) => {
-                return Err(Status::new_service_specific_error(
-                    ErrorCode::UNKNOWN_ERROR.0,
-                    None,
-                ))
+                return Err(Status::new_service_specific_error(ErrorCode::UNKNOWN_ERROR.0, None))
             }
             None => return Err(Status::new_service_specific_error(result.error_code, None)),
         };
@@ -772,7 +751,7 @@ impl IKeyMintDevice for KeyMintWrapper {
         &self,
         key_blob_to_upgrade: &[u8],
         upgrade_params: &[crate::android::hardware::security::keymint::KeyParameter::KeyParameter],
-    ) -> rsbinder::status::Result<Vec<u8>> {
+    ) -> rsbinder::BinderResult<Vec<u8>> {
         let version_number = resolve_hardware_profile(self.security_level).version_number;
         let upgrade_params = key_parameters_to_km(upgrade_params, version_number)
             .map_err(key_parameter_conversion_status)?;
@@ -782,14 +761,11 @@ impl IKeyMintDevice for KeyMintWrapper {
             upgrade_params,
         });
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::DeviceUpgradeKey(rsp)) => rsp.ret,
             Some(_) => {
-                return Err(Status::new_service_specific_error(
-                    ErrorCode::UNKNOWN_ERROR.0,
-                    None,
-                ))
+                return Err(Status::new_service_specific_error(ErrorCode::UNKNOWN_ERROR.0, None))
             }
             None => return Err(Status::new_service_specific_error(result.error_code, None)),
         };
@@ -797,16 +773,16 @@ impl IKeyMintDevice for KeyMintWrapper {
         Ok(result)
     }
 
-    fn deleteKey(&self, key_blob: &[u8]) -> rsbinder::status::Result<()> {
+    fn deleteKey(&self, key_blob: &[u8]) -> rsbinder::BinderResult<()> {
         self.delete_Key(key_blob).map_err(map_ks_error)
     }
 
-    fn deleteAllKeys(&self) -> rsbinder::status::Result<()> {
+    fn deleteAllKeys(&self) -> rsbinder::BinderResult<()> {
         let req = PerformOpReq::DeviceDeleteAllKeys(DeleteAllKeysRequest {});
         self.process_status_only(req).map_err(map_ks_error)
     }
 
-    fn destroyAttestationIds(&self) -> rsbinder::status::Result<()> {
+    fn destroyAttestationIds(&self) -> rsbinder::BinderResult<()> {
         let req = PerformOpReq::DeviceDestroyAttestationIds(DestroyAttestationIdsRequest {});
         self.process_status_only(req).map_err(map_ks_error)
     }
@@ -817,11 +793,11 @@ impl IKeyMintDevice for KeyMintWrapper {
         _timestamp_token: Option<
             &crate::android::hardware::security::secureclock::TimeStampToken::TimeStampToken,
         >,
-    ) -> rsbinder::status::Result<()> {
+    ) -> rsbinder::BinderResult<()> {
         Result::Err(Status::from(ExceptionCode::UnsupportedOperation))
     }
 
-    fn earlyBootEnded(&self) -> rsbinder::status::Result<()> {
+    fn earlyBootEnded(&self) -> rsbinder::BinderResult<()> {
         EARLY_BOOT_ENDED.store(true, Ordering::Release);
         let req = PerformOpReq::DeviceEarlyBootEnded(EarlyBootEndedRequest {});
         self.process_status_only(req).map_err(map_ks_error)
@@ -830,13 +806,13 @@ impl IKeyMintDevice for KeyMintWrapper {
     fn convertStorageKeyToEphemeral(
         &self,
         storage_key_blob: &[u8],
-    ) -> rsbinder::status::Result<Vec<u8>> {
+    ) -> rsbinder::BinderResult<Vec<u8>> {
         let req =
             PerformOpReq::DeviceConvertStorageKeyToEphemeral(ConvertStorageKeyToEphemeralRequest {
                 storage_key_blob: storage_key_blob.to_vec(),
             });
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::DeviceConvertStorageKeyToEphemeral(rsp)) => rsp.ret,
             Some(_) => unreachable!("Unexpected response type"),
@@ -851,7 +827,7 @@ impl IKeyMintDevice for KeyMintWrapper {
         key_blob: &[u8],
         app_id: &[u8],
         app_data: &[u8],
-    ) -> rsbinder::status::Result<
+    ) -> rsbinder::BinderResult<
         Vec<crate::android::hardware::security::keymint::KeyCharacteristics::KeyCharacteristics>,
     > {
         let req = PerformOpReq::DeviceGetKeyCharacteristics(GetKeyCharacteristicsRequest {
@@ -860,7 +836,7 @@ impl IKeyMintDevice for KeyMintWrapper {
             app_data: app_data.to_vec(),
         });
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::DeviceGetKeyCharacteristics(rsp)) => rsp.ret,
             Some(_) => unreachable!("Unexpected response type"),
@@ -880,17 +856,14 @@ impl IKeyMintDevice for KeyMintWrapper {
         }).collect()
     }
 
-    fn getRootOfTrustChallenge(&self) -> rsbinder::status::Result<[u8; 16]> {
+    fn getRootOfTrustChallenge(&self) -> rsbinder::BinderResult<[u8; 16]> {
         let req = PerformOpReq::GetRootOfTrustChallenge(GetRootOfTrustChallengeRequest {});
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::GetRootOfTrustChallenge(rsp)) => rsp.ret,
             Some(_) => {
-                return Err(Status::new_service_specific_error(
-                    ErrorCode::UNKNOWN_ERROR.0,
-                    None,
-                ))
+                return Err(Status::new_service_specific_error(ErrorCode::UNKNOWN_ERROR.0, None))
             }
             None => return Err(Status::new_service_specific_error(result.error_code, None)),
         };
@@ -898,12 +871,10 @@ impl IKeyMintDevice for KeyMintWrapper {
         Ok(result)
     }
 
-    fn getRootOfTrust(&self, challenge: &[u8; 16]) -> rsbinder::status::Result<Vec<u8>> {
-        let req = PerformOpReq::GetRootOfTrust(GetRootOfTrustRequest {
-            challenge: *challenge,
-        });
+    fn getRootOfTrust(&self, challenge: &[u8; 16]) -> rsbinder::BinderResult<Vec<u8>> {
+        let req = PerformOpReq::GetRootOfTrust(GetRootOfTrustRequest { challenge: *challenge });
 
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let result = match result.rsp {
             Some(PerformOpRsp::GetRootOfTrust(rsp)) => rsp.ret,
             Some(_) => unreachable!("Unexpected response type"),
@@ -913,7 +884,7 @@ impl IKeyMintDevice for KeyMintWrapper {
         Ok(result)
     }
 
-    fn sendRootOfTrust(&self, root_of_trust: &[u8]) -> rsbinder::status::Result<()> {
+    fn sendRootOfTrust(&self, root_of_trust: &[u8]) -> rsbinder::BinderResult<()> {
         let req = PerformOpReq::SendRootOfTrust(SendRootOfTrustRequest {
             root_of_trust: root_of_trust.to_vec(),
         });
@@ -923,7 +894,7 @@ impl IKeyMintDevice for KeyMintWrapper {
     fn setAdditionalAttestationInfo(
         &self,
         info: &[crate::android::hardware::security::keymint::KeyParameter::KeyParameter],
-    ) -> rsbinder::status::Result<()> {
+    ) -> rsbinder::BinderResult<()> {
         let version_number = resolve_hardware_profile(self.security_level).version_number;
         let additional_info =
             key_parameters_to_km(info, version_number).map_err(key_parameter_conversion_status)?;
@@ -944,10 +915,7 @@ impl KeyMintWrapper {
                 .context(err!("StrongBox KeyMint HAL is not present"));
         }
 
-        Ok(KeyMintWrapper {
-            security_level,
-            inner: shared_keymint_wrapper_inner(security_level)?,
-        })
+        Ok(KeyMintWrapper { security_level, inner: shared_keymint_wrapper_inner(security_level)? })
     }
 
     pub fn clear_attestation_cache(&self) {
@@ -955,18 +923,14 @@ impl KeyMintWrapper {
     }
 
     pub fn localize_auth_token(&self, auth_token: &HardwareAuthToken) -> Result<HardwareAuthToken> {
-        let km_token = auth_token
-            .to_km()
-            .context(err!("invalid auth token fields"))?;
+        let km_token = auth_token.to_km().context(err!("invalid auth token fields"))?;
         let mac_input = kmr_ta::hardware_auth_token_mac_input(&km_token)
             .map_err(|error| anyhow::anyhow!("{error:?}"))
             .context(err!("failed to build auth token MAC input"))?;
         let hmac_key = self
             .inner
-            .keymint
-            .lock()
-            .unwrap()
-            .get_hmac_key()
+            .auth_token_hmac_key
+            .as_ref()
             .ok_or(Error::Km(ErrorCode::HARDWARE_NOT_YET_AVAILABLE))
             .context(err!("auth-token HMAC key is not initialized"))?;
         let mac = kmr_common::crypto::hmac_sha256(&BoringHmac, &hmac_key.0, &mac_input)
@@ -979,22 +943,11 @@ impl KeyMintWrapper {
     }
 
     pub fn get_hardware_info(&self) -> Result<keymint::KeyMintHardwareInfo, Error> {
-        self.inner
-            .keymint
-            .lock()
-            .unwrap()
-            .get_hardware_info()
-            .map_err(|_| Error::Km(ErrorCode::UNKNOWN_ERROR))
+        Ok(self.inner.hardware_info.clone())
     }
 
     fn process_status_only(&self, req: PerformOpReq) -> Result<(), Error> {
-        let error_code = self
-            .inner
-            .keymint
-            .lock()
-            .unwrap()
-            .process_req(req)
-            .error_code;
+        let error_code = self.inner.execute(req).error_code;
         match error_code {
             0 => Ok(()),
             _ => Err(Error::Binder(ExceptionCode::ServiceSpecific, error_code)),
@@ -1021,7 +974,7 @@ impl KeyMintWrapper {
             auth_token: hardware_auth_token,
             timestamp_token,
         });
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let error_code = result.error_code;
         let _result: UpdateAadResponse = match result.rsp {
             Some(PerformOpRsp::OperationUpdateAad(rsp)) => rsp,
@@ -1052,7 +1005,7 @@ impl KeyMintWrapper {
             auth_token: hardware_auth_token,
             timestamp_token,
         });
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let error_code = result.error_code;
         let result: UpdateResponse = match result.rsp {
             Some(PerformOpRsp::OperationUpdate(rsp)) => rsp,
@@ -1090,7 +1043,7 @@ impl KeyMintWrapper {
             timestamp_token,
             confirmation_token,
         });
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let error_code = result.error_code;
         let result: FinishResponse = match result.rsp {
             Some(PerformOpRsp::OperationFinish(rsp)) => rsp,
@@ -1103,7 +1056,7 @@ impl KeyMintWrapper {
 
     pub fn op_abort(&self, op_handle: i64) -> Result<(), Error> {
         let req = PerformOpReq::OperationAbort(AbortRequest { op_handle });
-        let result = self.inner.keymint.lock().unwrap().process_req(req);
+        let result = self.inner.execute(req);
         let error_code = result.error_code;
         let _result: AbortResponse = match result.rsp {
             Some(PerformOpRsp::OperationAbort(rsp)) => rsp,
@@ -1127,9 +1080,7 @@ fn timestamp_token_to_wire(
 ) -> kmr_wire::secureclock::TimeStampToken {
     kmr_wire::secureclock::TimeStampToken {
         challenge: token.challenge,
-        timestamp: kmr_wire::secureclock::Timestamp {
-            milliseconds: token.timestamp.milliSeconds,
-        },
+        timestamp: kmr_wire::secureclock::Timestamp { milliseconds: token.timestamp.milliSeconds },
         mac: token.mac.clone(),
     }
 }
@@ -1271,14 +1222,10 @@ fn init_keymint_ta(security_level: SecurityLevel, config: &Config) -> Result<Key
         mldsa: Box::new(kmr_crypto_boring::mldsa::BoringMlDsa),
     };
 
-    let keys: Box<dyn kmr_ta::device::RetrieveKeyMaterial> = Box::new(soft::Keys::new(
-        config.crypto.root_kek_seed,
-        config.crypto.kak_seed,
-    ));
-    let rpc: Box<dyn kmr_ta::device::RetrieveRpcArtifacts> = Box::new(soft::RpcArtifacts::new(
-        soft::Derive::default(),
-        CsrSigningAlgorithm::EdDSA,
-    ));
+    let keys: Box<dyn kmr_ta::device::RetrieveKeyMaterial> =
+        Box::new(soft::Keys::new(config.crypto.root_kek_seed, config.crypto.kak_seed));
+    let rpc: Box<dyn kmr_ta::device::RetrieveRpcArtifacts> =
+        Box::new(soft::RpcArtifacts::new(soft::Derive::default(), CsrSigningAlgorithm::EdDSA));
 
     let dev = kmr_ta::device::Implementation {
         keys,
@@ -1327,11 +1274,7 @@ fn init_keymint_ta(security_level: SecurityLevel, config: &Config) -> Result<Key
         .context(err!("Failed to parse boot patch level"))?;
 
     let resp = ta.process_req(PerformOpReq::SetBootInfo(kmr_wire::SetBootInfoRequest {
-        verified_boot_state: if config.trust.verified_boot_state {
-            0
-        } else {
-            2
-        },
+        verified_boot_state: if config.trust.verified_boot_state { 0 } else { 2 },
         verified_boot_hash: config.trust.vb_hash.clone().to_vec(),
         verified_boot_key: config.trust.vb_key.clone().to_vec(),
         device_boot_locked: config.trust.device_locked,
@@ -1346,11 +1289,9 @@ fn init_keymint_ta(security_level: SecurityLevel, config: &Config) -> Result<Key
         return Err(Error::Km(ErrorCode::UNKNOWN_ERROR)).context(err!("Failed to set HAL info"));
     }
 
-    let resp = ta.process_req(PerformOpReq::SetHalVersion(
-        kmr_wire::SetHalVersionRequest {
-            aidl_version: profile.version_number as u32,
-        },
-    ));
+    let resp = ta.process_req(PerformOpReq::SetHalVersion(kmr_wire::SetHalVersionRequest {
+        aidl_version: profile.version_number as u32,
+    }));
     if resp.error_code != 0 {
         return Err(Error::Km(ErrorCode::UNKNOWN_ERROR)).context(err!("Failed to set HAL version"));
     }
@@ -1411,11 +1352,7 @@ pub fn apply_runtime_config_update(
         let boot_patchlevel = extract_boot_patchlevel(&candidate.trust.boot_patchlevel)
             .map_err(anyhow::Error::msg)
             .context(err!("Failed to parse boot patch level"))?;
-        Some((
-            hal_info.os_patchlevel,
-            hal_info.vendor_patchlevel,
-            boot_patchlevel,
-        ))
+        Some((hal_info.os_patchlevel, hal_info.vendor_patchlevel, boot_patchlevel))
     } else {
         None
     };
@@ -1423,26 +1360,19 @@ pub fn apply_runtime_config_update(
         .lock()
         .map_err(|_| anyhow!("keymint wrapper lifecycle lock poisoned"))?;
     let mut tee = if patchlevels.is_some() {
-        KM_WRAPPER_TEE
-            .get()
-            .map(|wrapper| wrapper.keymint.lock().unwrap())
+        KM_WRAPPER_TEE.get().map(|wrapper| wrapper.keymint.lock().unwrap())
     } else {
         None
     };
     let mut strongbox = if patchlevels.is_some() {
-        KM_WRAPPER_STRONGBOX
-            .get()
-            .map(|wrapper| wrapper.keymint.lock().unwrap())
+        KM_WRAPPER_STRONGBOX.get().map(|wrapper| wrapper.keymint.lock().unwrap())
     } else {
         None
     };
     if tee.as_ref().is_some_and(|live| !live.patchlevels_are_set()) {
         return Err(anyhow!("TEE patch levels are not initialized"));
     }
-    if strongbox
-        .as_ref()
-        .is_some_and(|live| !live.patchlevels_are_set())
-    {
+    if strongbox.as_ref().is_some_and(|live| !live.patchlevels_are_set()) {
         return Err(anyhow!("StrongBox patch levels are not initialized"));
     }
     let mut runtime = config()
@@ -1469,23 +1399,20 @@ pub fn apply_runtime_config_update(
 
 pub fn clear_initialized_attestation_caches() {
     if let Some(wrapper) = KM_WRAPPER_TEE.get() {
-        let keymint = KeyMintWrapper {
-            security_level: SecurityLevel::TRUSTED_ENVIRONMENT,
-            inner: wrapper.clone(),
-        };
+        let keymint =
+            KeyMintWrapper { security_level: SecurityLevel::TRUSTED_ENVIRONMENT, inner: wrapper };
         keymint.clear_attestation_cache();
     }
 
     if let Some(wrapper) = KM_WRAPPER_STRONGBOX.get() {
-        let keymint = KeyMintWrapper {
-            security_level: SecurityLevel::STRONGBOX,
-            inner: wrapper.clone(),
-        };
+        let keymint = KeyMintWrapper { security_level: SecurityLevel::STRONGBOX, inner: wrapper };
         keymint.clear_attestation_cache();
     }
 }
 
-fn shared_keymint_wrapper_inner(security_level: SecurityLevel) -> Result<Arc<KeyMintWrapperInner>> {
+fn shared_keymint_wrapper_inner(
+    security_level: SecurityLevel,
+) -> Result<&'static KeyMintWrapperInner> {
     let wrapper = match security_level {
         SecurityLevel::STRONGBOX => &KM_WRAPPER_STRONGBOX,
         SecurityLevel::TRUSTED_ENVIRONMENT => &KM_WRAPPER_TEE,
@@ -1499,7 +1426,7 @@ fn shared_keymint_wrapper_inner(security_level: SecurityLevel) -> Result<Arc<Key
         }
     };
     if let Some(wrapper) = wrapper.get() {
-        return Ok(wrapper.clone());
+        return Ok(wrapper);
     }
     let _lifecycle = KM_WRAPPER_LIFECYCLE
         .lock()
@@ -1508,18 +1435,92 @@ fn shared_keymint_wrapper_inner(security_level: SecurityLevel) -> Result<Arc<Key
         .read()
         .map_err(|_| anyhow!("config lock poisoned while initializing keymint wrapper"))?
         .clone();
-    wrapper
-        .get_or_try_init(|| {
-            Ok(Arc::new(KeyMintWrapperInner {
-                keymint: Mutex::new(init_keymint_ta(security_level, &snapshot)?),
-            }))
-        })
-        .map(Arc::clone)
+    wrapper.get_or_try_init(|| {
+        let ta = init_keymint_ta(security_level, &snapshot)?;
+        let auth_token_hmac_key = ta.get_hmac_key();
+        let hardware_info =
+            ta.get_hardware_info().map_err(|_| Error::Km(ErrorCode::UNKNOWN_ERROR))?;
+        Ok(KeyMintWrapperInner { keymint: Mutex::new(ta), auth_token_hmac_key, hardware_info })
+    })
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    fn test_crypto() -> kmr_common::crypto::Implementation {
+        kmr_common::crypto::Implementation {
+            rng: Box::new(BoringRng),
+            clock: Some(Box::new(clock::StdClock)),
+            compare: Box::new(kmr_crypto_boring::eq::BoringEq),
+            aes: Box::new(kmr_crypto_boring::aes::BoringAes),
+            des: Box::new(kmr_crypto_boring::des::BoringDes),
+            hmac: Box::new(BoringHmac),
+            rsa: Box::new(BoringRsa::default()),
+            ec: Box::new(BoringEc::default()),
+            ckdf: Box::new(kmr_crypto_boring::aes_cmac::BoringAesCmac),
+            hkdf: Box::new(BoringHmac),
+            sha256: Box::new(kmr_crypto_boring::sha256::BoringSha256),
+            mldsa: Box::new(kmr_crypto_boring::mldsa::BoringMlDsa),
+        }
+    }
+
+    pub(crate) fn test_ta() -> KeyMintTa {
+        let hw_info = HardwareInfo {
+            version_number: KeyMintDevice::KEY_MINT_V5,
+            security_level: kmr_wire::keymint::SecurityLevel::TrustedEnvironment,
+            impl_name: "test",
+            author_name: "test",
+            unique_id: "test",
+        };
+        let rpc_info = RpcInfoV3 {
+            author_name: "test",
+            unique_id: "test",
+            fused: false,
+            supported_num_of_keys_in_csr: MINIMUM_SUPPORTED_KEYS_IN_CSR,
+        };
+        let dev = kmr_ta::device::Implementation {
+            keys: Box::new(soft::Keys::new([0; 32], [1; 32])),
+            sign_info: None,
+            attest_ids: None,
+            sdd_mgr: None,
+            bootloader: Box::new(kmr_ta::device::BootloaderDone),
+            sk_wrapper: None,
+            tup: Box::new(kmr_ta::device::TrustedPresenceUnsupported),
+            legacy_key: None,
+            rpc: Box::new(kmr_ta::device::NoOpRetrieveRpcArtifacts),
+        };
+
+        KeyMintTa::new_allowing_versions(
+            hw_info,
+            RpcInfo::V3(rpc_info),
+            test_crypto(),
+            dev,
+            vec![KeyMintHalVersion::V5],
+        )
+    }
+
+    pub(super) fn set_boot_info(ta: &mut KeyMintTa) -> i32 {
+        ta.process_req(PerformOpReq::SetBootInfo(kmr_wire::SetBootInfoRequest {
+            verified_boot_state: 0,
+            verified_boot_hash: vec![0; 32],
+            verified_boot_key: vec![0; 32],
+            device_boot_locked: true,
+            boot_patchlevel: 20250605,
+        }))
+        .error_code
+    }
+
+    pub(crate) fn wrapper(ta: KeyMintTa) -> KeyMintWrapper {
+        KeyMintWrapper {
+            security_level: SecurityLevel::TRUSTED_ENVIRONMENT,
+            inner: Box::leak(Box::new(KeyMintWrapperInner {
+                auth_token_hmac_key: ta.get_hmac_key(),
+                hardware_info: ta.get_hardware_info().unwrap(),
+                keymint: Mutex::new(ta),
+            })),
+        }
+    }
 
     fn param(tag: Tag, value: KeyParameterValue) -> KeyParameter {
         KeyParameter { tag, value }
@@ -1561,10 +1562,7 @@ mod tests {
         ];
         for (os_version, os_patch, vendor_patch, want) in tests {
             let got = populate_hal_info_from(os_version, os_patch, vendor_patch).unwrap();
-            assert_eq!(
-                got, want,
-                "Mismatch for input ({os_version}, {os_patch}, {vendor_patch})"
-            );
+            assert_eq!(got, want, "Mismatch for input ({os_version}, {os_patch}, {vendor_patch})");
         }
     }
 
@@ -1578,43 +1576,13 @@ mod tests {
     #[test]
     fn invalid_hal_info_matches_aosp_rejections() {
         let tests = vec![
-            (
-                "xx",
-                "2021-02-02",
-                "2022-03-04",
-                "failed to match OS version",
-            ),
-            (
-                "12.xx",
-                "2021-02-02",
-                "2022-03-04",
-                "failed to match OS version",
-            ),
-            (
-                "12.5.xx",
-                "2021-02-02",
-                "2022-03-04",
-                "failed to match OS version",
-            ),
-            (
-                "12",
-                "20212-02-02",
-                "2022-03-04",
-                "failed to match patchlevel regex",
-            ),
-            (
-                "12",
-                "2021-xx-02",
-                "2022-03-04",
-                "failed to match patchlevel",
-            ),
+            ("xx", "2021-02-02", "2022-03-04", "failed to match OS version"),
+            ("12.xx", "2021-02-02", "2022-03-04", "failed to match OS version"),
+            ("12.5.xx", "2021-02-02", "2022-03-04", "failed to match OS version"),
+            ("12", "20212-02-02", "2022-03-04", "failed to match patchlevel regex"),
+            ("12", "2021-xx-02", "2022-03-04", "failed to match patchlevel"),
             ("12", "2021-13-02", "2022-03-04", "month out of range"),
-            (
-                "12",
-                "2022-03-04",
-                "2021-xx-02",
-                "failed to match patchlevel",
-            ),
+            ("12", "2022-03-04", "2021-xx-02", "failed to match patchlevel"),
             ("12", "2022-03-04", "2021-13-02", "month out of range"),
             ("12", "2022-03-04", "2021-03-32", "day out of range"),
         ];
@@ -1632,10 +1600,7 @@ mod tests {
     #[test]
     fn begin_conversion_skips_plain_accepted_metadata_tags() {
         let params = vec![
-            param(
-                Tag::PURPOSE,
-                KeyParameterValue::KeyPurpose(KeyPurpose::SIGN),
-            ),
+            param(Tag::PURPOSE, KeyParameterValue::KeyPurpose(KeyPurpose::SIGN)),
             param(Tag::ASSOCIATED_DATA, KeyParameterValue::Blob(vec![1])),
             param(Tag::CONFIRMATION_TOKEN, KeyParameterValue::Blob(vec![2])),
             param(Tag::MIN_SECONDS_BETWEEN_OPS, KeyParameterValue::Integer(30)),
@@ -1644,10 +1609,7 @@ mod tests {
                 KeyParameterValue::SecurityLevel(SecurityLevel::TRUSTED_ENVIRONMENT),
             ),
             param(Tag::UNIQUE_ID, KeyParameterValue::Blob(vec![3])),
-            param(
-                Tag::IDENTITY_CREDENTIAL_KEY,
-                KeyParameterValue::BoolValue(true),
-            ),
+            param(Tag::IDENTITY_CREDENTIAL_KEY, KeyParameterValue::BoolValue(true)),
         ];
 
         assert_eq!(
@@ -1667,77 +1629,11 @@ mod tests {
         ));
         assert!(matches!(
             begin_key_parameters_to_km(
-                &[param(
-                    Tag::IDENTITY_CREDENTIAL_KEY,
-                    KeyParameterValue::BoolValue(false),
-                )],
+                &[param(Tag::IDENTITY_CREDENTIAL_KEY, KeyParameterValue::BoolValue(false),)],
                 KeyMintDevice::KEY_MINT_V5
             ),
             Err(ValueNotRecognized::Bool)
         ));
-    }
-
-    fn test_crypto() -> kmr_common::crypto::Implementation {
-        kmr_common::crypto::Implementation {
-            rng: Box::new(BoringRng),
-            clock: Some(Box::new(clock::StdClock)),
-            compare: Box::new(kmr_crypto_boring::eq::BoringEq),
-            aes: Box::new(kmr_crypto_boring::aes::BoringAes),
-            des: Box::new(kmr_crypto_boring::des::BoringDes),
-            hmac: Box::new(BoringHmac),
-            rsa: Box::new(BoringRsa::default()),
-            ec: Box::new(BoringEc::default()),
-            ckdf: Box::new(kmr_crypto_boring::aes_cmac::BoringAesCmac),
-            hkdf: Box::new(BoringHmac),
-            sha256: Box::new(kmr_crypto_boring::sha256::BoringSha256),
-            mldsa: Box::new(kmr_crypto_boring::mldsa::BoringMlDsa),
-        }
-    }
-
-    fn test_ta() -> KeyMintTa {
-        let hw_info = HardwareInfo {
-            version_number: KeyMintDevice::KEY_MINT_V5,
-            security_level: kmr_wire::keymint::SecurityLevel::TrustedEnvironment,
-            impl_name: "test",
-            author_name: "test",
-            unique_id: "test",
-        };
-        let rpc_info = RpcInfoV3 {
-            author_name: "test",
-            unique_id: "test",
-            fused: false,
-            supported_num_of_keys_in_csr: MINIMUM_SUPPORTED_KEYS_IN_CSR,
-        };
-        let dev = kmr_ta::device::Implementation {
-            keys: Box::new(soft::Keys::new([0; 32], [1; 32])),
-            sign_info: None,
-            attest_ids: None,
-            sdd_mgr: None,
-            bootloader: Box::new(kmr_ta::device::BootloaderDone),
-            sk_wrapper: None,
-            tup: Box::new(kmr_ta::device::TrustedPresenceUnsupported),
-            legacy_key: None,
-            rpc: Box::new(kmr_ta::device::NoOpRetrieveRpcArtifacts),
-        };
-
-        KeyMintTa::new_allowing_versions(
-            hw_info,
-            RpcInfo::V3(rpc_info),
-            test_crypto(),
-            dev,
-            vec![KeyMintHalVersion::V5],
-        )
-    }
-
-    fn set_boot_info(ta: &mut KeyMintTa) -> i32 {
-        ta.process_req(PerformOpReq::SetBootInfo(kmr_wire::SetBootInfoRequest {
-            verified_boot_state: 0,
-            verified_boot_hash: vec![0; 32],
-            verified_boot_key: vec![0; 32],
-            device_boot_locked: true,
-            boot_patchlevel: 20250605,
-        }))
-        .error_code
     }
 
     #[test]

@@ -1,7 +1,9 @@
+use crate::hook::binder::LocalBinderTarget;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
-use crate::hook::binder::LocalBinderTarget;
+#[cfg(test)]
+pub(crate) mod tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SecurityLevelTargetInfo {
@@ -11,27 +13,18 @@ pub struct SecurityLevelTargetInfo {
 static SECURITY_LEVEL_TARGETS: LazyLock<
     Mutex<HashMap<LocalBinderTarget, SecurityLevelTargetInfo>>,
 > = LazyLock::new(|| Mutex::new(HashMap::new()));
-#[cfg(test)]
-static STATE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn remember_security_level_target(
     target: LocalBinderTarget,
     info: SecurityLevelTargetInfo,
 ) {
-    SECURITY_LEVEL_TARGETS
-        .lock()
-        .expect("security level target map poisoned")
-        .insert(target, info);
+    SECURITY_LEVEL_TARGETS.lock().expect("security level target map poisoned").insert(target, info);
 }
 
 pub(crate) fn lookup_security_level_target(
     target: LocalBinderTarget,
 ) -> Option<SecurityLevelTargetInfo> {
-    SECURITY_LEVEL_TARGETS
-        .lock()
-        .expect("security level target map poisoned")
-        .get(&target)
-        .copied()
+    SECURITY_LEVEL_TARGETS.lock().expect("security level target map poisoned").get(&target).copied()
 }
 
 /// Interface token each binder node has already been observed to serve.
@@ -52,67 +45,12 @@ static TARGET_INTERFACES: LazyLock<Mutex<HashMap<LocalBinderTarget, String>>> =
 
 /// Whether `interface` may be dispatched for the node that received this transaction.
 pub(crate) fn interface_matches_target(target: LocalBinderTarget, interface: &str) -> bool {
-    let mut targets = TARGET_INTERFACES
-        .lock()
-        .expect("target interface map poisoned");
+    let mut targets = TARGET_INTERFACES.lock().expect("target interface map poisoned");
     match targets.get(&target) {
         Some(observed) => observed == interface,
         None => {
             targets.insert(target, interface.to_owned());
             true
         }
-    }
-}
-
-#[cfg(test)]
-pub fn clear_state_for_tests() {
-    SECURITY_LEVEL_TARGETS
-        .lock()
-        .expect("security level target map poisoned")
-        .clear();
-    TARGET_INTERFACES
-        .lock()
-        .expect("target interface map poisoned")
-        .clear();
-}
-
-#[cfg(test)]
-pub fn state_test_guard() -> std::sync::MutexGuard<'static, ()> {
-    let guard = STATE_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    clear_state_for_tests();
-    guard
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn target(ptr: u64) -> LocalBinderTarget {
-        LocalBinderTarget { ptr, cookie: ptr }
-    }
-
-    #[test]
-    fn interface_is_bound_to_the_target_that_served_it() {
-        let _guard = state_test_guard();
-        let service = target(0x1000);
-        let maintenance = target(0x2000);
-
-        assert!(interface_matches_target(service, "IKeystoreService"));
-        assert!(interface_matches_target(
-            maintenance,
-            "IKeystoreMaintenance"
-        ));
-        assert!(interface_matches_target(service, "IKeystoreService"));
-        assert!(interface_matches_target(
-            maintenance,
-            "IKeystoreMaintenance"
-        ));
-
-        // A foreign token is refused and does not take the node over.
-        assert!(!interface_matches_target(service, "IKeystoreMaintenance"));
-        assert!(!interface_matches_target(maintenance, "IKeystoreService"));
-        assert!(interface_matches_target(service, "IKeystoreService"));
     }
 }

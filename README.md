@@ -18,7 +18,7 @@ Android Keystore 伪造器的自定义密钥库实现
 2. 如需要，[配置 OMK](docs/CONFIGURATION.md)。
 3. 替换模板 keybox.xml（如需要）
 
-keybox 文件必须是一个**有效的** XML 文件，这意味着文件中不能有任何额外内容，例如水印或不可见字符。只带一条链的文件也接受：缺失的那条链会从模块自带的模板补齐。仍然建议自己提供完整的 EC + RSA 两条链，因为自带的模板是公开的软件认证密钥。
+keybox 文件必须是一个**有效的** XML 文件，至少包含 EC 链；不含 RSA 条目时，RSA 密钥的证明使用 EC 密钥及其证书链签发。文件中不能有任何额外内容，例如水印或不可见字符。
 
 生效的配置文件位于 `/data/misc/keystore/omk/config.toml` 和
 `/data/misc/keystore/omk/injector.toml`。完整的注释示例、逐字段说明、安全注意事项以及重启要求，请阅读
@@ -43,39 +43,42 @@ touch /data/adb/omk/restart.all
 
 **使用本软件前，您必须同意以下两项许可证。**
 
-`AGPL-3.0-or-later`
+`General License Agreement`
 
 ```plaintext
 OhMyKeymint - Custom keymint implementation for Android Keystore Spoofer
-Copyright (C) 2025 James Clef <qwq233@qwq2333.top>
+Copyright (C) 2026 James Clef <qwq233@qwq2333.top>
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
+This program is open source software: you can redistribute it and/or 
+modify it under the terms of the General License Agreement as
+published by James Clef, either version 4 of the
 License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
+General License Agreement for more details.
 
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the General License Agreement
+along with this program.  If not, see <https://github.com/qwq233/license/>.
 ```
 
 `Oh My Keymint License`
 
 ```plaintext
-1. 您不得将本软件、本软件的任意部分或将本软件作为依赖的软件用于任何商业用途。该
-   商业用途包括但不限于以盈利为目的，将本软件、本软件的任意部分或将本软件作为依
-   赖的软件与其他资源、物品或服务捆绑销售。
-2. 您不得暗示或明示本软件与其他软件有任何从属关系。
-3. 未经本软件作者书面允许，您不得超出合理使用范围或协议许可范围使用本软件的名称。
-4. 除非您所在的司法管辖区的适用法律另行规定，您同意将纠纷或争议提交至中国大陆境
+1. 除经本软件作者书面许可外，不得将本软件名称或与其近似的名称用于修改版、衍生作
+   品或相关服务的命名、宣传；法律允许的指名性使用除外。本软件的修改版或衍生作品
+   如与本软件存在明显区别，须使用其他名称。例如，包含不属于本软件原版的功能或附
+   属资源，或使用本软件名称可能导致公众误认为该修改版由原项目作者发布、认可或存
+   在关联，即属于此类情形。上述作品须保留本软件的著作权声明、作者署名及许可证文
+   件并以显著方式标注该作品为本软件的衍生作品，且不得暗示本软件作者对其承担任何
+   责任。即使不属于上述须更名情形的修改版或衍生作品，本软件作者认为有必要时，仍
+   有权要求其更名。
+
+2. 除非您所在的司法管辖区的适用法律另行规定，您同意将纠纷或争议提交至中国大陆境
    内有管辖权的人民法院管辖。
-5. 本协议与GNU Affero General Public License（以下简称AGPL）共同发挥效力，
-   当本协议内容与AGPL冲突时，应当优先应用本协议内容，本协议仅覆盖本软件作者拥有
-   完全著作权的部分，对于使用其他协议的软件代码不发挥效力。
+
+3. 本协议与General License Agreement共同发挥效力。
 ```
 
 ## 致谢

@@ -213,10 +213,11 @@ keybox that you use.
 
 ### What makes a keybox valid?
 
-OMK requires one complete RSA entry and one complete EC entry. For both
-entries, the private key must match its certificate chain. The file must also
-be clean XML, without watermarks, comments inserted into key data, invisible
-characters, or other extra content.
+OMK requires one complete EC entry and accepts an optional complete RSA entry.
+For any entry that is present, the private key must match its certificate
+chain. When an RSA entry is absent, attestation for RSA keys is signed with the
+EC key and its certificate chain. The file must also be clean XML, without watermarks, comments inserted
+into key data, invisible characters, or other extra content.
 
 A file working in another module does not prove that it is valid. Some other
 tools accept damaged or incomplete XML that OMK correctly rejects.
@@ -245,6 +246,11 @@ Some apps bind their login or encryption keys to the attestation identity that
 was active when the keys were created. After a keybox change, those apps may
 require sign-in, identity verification, or device registration again. This
 cannot always be avoided.
+
+OMK deletes those keys by default. If
+[`main.retire_stale_keybox_bound_keys`](CONFIGURATION.md#retire_stale_keybox_bound_keys)
+is disabled, the keybox change instead keeps client keys created under the
+previous keybox identity.
 
 Change a keybox only when you have time to re-register important apps. Back up
 first, but do not delete the whole OMK data directory.
@@ -376,6 +382,16 @@ The app may require the lock-screen PIN or password instead of a fingerprint,
 or the authorization may have expired before the operation started. A log such
 as `KEY_USER_NOT_AUTHENTICATED` does not always mean OMK is broken.
 
+After System accepts an authentication or maintenance update, the injector
+forwards it to OMK once before returning the System reply. Auth tokens use a
+separate RPC session from key operations and lifecycle updates. Business RPC
+sessions use up to four connections; auth-token and lifecycle sessions each use
+one. Failed updates are discarded without retries or a global recovery gate.
+A mirror failure returns an OMK error for a caller allowed by the filter and
+preserves the System reply for other callers. A stalled synchronous RPC can still
+wait without a separate timeout. Authentication and lock-state checks apply when
+the operation runs.
+
 Authenticate in the way the app requests and retry promptly. Keep
 `force_skip_system_biometric_hat_verification` at `false` unless a maintainer
 is diagnosing a confirmed device-specific compatibility problem.
@@ -475,6 +491,13 @@ for a usage question, the
 for a repeatable defect, and the
 [Feature request form](https://github.com/qwq233/OhMyKeymint/issues/new?template=feature_request.yml)
 for a proposed change. Read this FAQ and search existing reports first.
+
+All issues must use one of these forms, retain the title prefix, and include
+every required field and pre-submission confirmation. Non-template or
+incomplete issues are automatically closed. Write the issue yourself: do not
+use an LLM to create it or copy LLM-generated descriptions or phrasing. Read
+the [Issue rules](CONTRIBUTING.md#issues) and
+[AI policy](AI-Policy.md#issues-must-be-written-without-llms) before submitting.
 
 For community discussion, use the Telegram link in the [README](../README.md).
 Never share private keys, generated seeds, or personal identifiers in any

@@ -9,11 +9,15 @@ body:
       value: |
         Read the [FAQ](https://github.com/qwq233/OhMyKeymint/blob/master/docs/FAQ.md) and [README](https://github.com/qwq233/OhMyKeymint/blob/master/README.md), then search existing issues.
 
+        Use this form and write the issue yourself. Do not use an LLM to create an issue or copy LLM-generated descriptions or phrasing. Non-template issues are automatically closed. See the [AI policy](https://github.com/qwq233/OhMyKeymint/blob/master/docs/AI-Policy.md).
+
   - type: checkboxes
     id: preflight
     attributes:
       label: Pre-submission checks
       options:
+        - label: I wrote this issue myself without using an LLM or copying LLM-generated descriptions or phrasing.
+          required: true
         - label: I kept the required `[Question]` prefix and added a specific title after it.
           required: true
         - label: The FAQ, README, and existing issues do not answer this question.

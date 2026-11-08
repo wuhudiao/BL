@@ -6,6 +6,23 @@ Thank you for improving OhMyKeymint. Before submitting a change, read the
 invariants in [AGENTS.md](../AGENTS.md). Discuss substantial features or behavior
 changes in an issue first.
 
+## Issues
+
+Use the appropriate [Issue form](https://github.com/qwq233/OhMyKeymint/issues/new/choose)
+for every bug report, feature request, or question. Keep its title prefix, fill
+in every required field, and complete every pre-submission checkbox.
+
+Any issue created without using issue template will be automatically closed.
+
+Write the title and description yourself from your own observations. Do not
+use an LLM to create, draft, rewrite, or translate an issue, and do not copy
+LLM-generated descriptions or phrasing into it.
+
+Any issue written completely by LLMs, even that is a real bug or issue, will be
+ignored or given much lower priority.
+
+See more info in [AI policy](AI-Policy.md#issues-must-be-written-without-llms).
+
 ## AI-assisted contributions
 
 Before submitting any contribution, read and follow the
@@ -103,6 +120,7 @@ Rust changes must pass:
 cargo fmt --all -- --check
 cargo clippy --target aarch64-linux-android --workspace --all-targets -- -D warnings
 cargo test --target aarch64-linux-android --workspace --no-run
+cargo deny --workspace check
 ```
 
 When an authorized aarch64 Android device is available, run every generated

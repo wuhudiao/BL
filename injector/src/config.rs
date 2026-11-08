@@ -13,6 +13,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::Duration;
 
+#[cfg(test)]
+mod tests;
+
 pub const DEFAULT_CONFIG_PATH: &str = "/data/misc/keystore/omk/injector.toml";
 const CURRENT_CONFIG_VERSION: u32 = 1;
 const REPLACE_SAVE_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -91,10 +94,7 @@ fn default_scoop() -> Vec<String> {
 
 impl Default for MainConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            log_level: "debug".to_string(),
-        }
+        Self { enabled: true, log_level: "debug".to_string() }
     }
 }
 
@@ -271,11 +271,7 @@ fn load_or_seed(path: &Path, context: LoadContext) -> Option<InjectorConfig> {
                 );
             }
             if matches!(context, LoadContext::Startup) {
-                log::info!(
-                    "loaded config from {} via {}",
-                    path.display(),
-                    context.label()
-                );
+                log::info!("loaded config from {} via {}", path.display(), context.label());
             }
             Some(loaded.value)
         }
@@ -377,11 +373,6 @@ fn render_config(config: &InjectorConfig) -> io::Result<String> {
     Ok(contents)
 }
 
-#[cfg(test)]
-fn parse_config(contents: &str) -> Result<InjectorConfig, String> {
-    parse_versioned_config(contents, true).map(|(config, _)| config)
-}
-
 fn parse_versioned_config(
     contents: &str,
     allow_migration: bool,
@@ -395,7 +386,7 @@ fn parse_versioned_config(
         None => {
             if !allow_migration {
                 return Err(
-                    "injector config version 0 requires an injector restart to migrate".into(),
+                    "injector config version 0 requires an injector restart to migrate".into()
                 );
             }
             Some(insert_config_version(contents, bom_len))
@@ -409,7 +400,7 @@ fn parse_versioned_config(
             }
             0 => {
                 return Err(
-                    "injector config version 0 requires an injector restart to migrate".into(),
+                    "injector config version 0 requires an injector restart to migrate".into()
                 )
             }
             version if version == i64::from(CURRENT_CONFIG_VERSION) => None,
@@ -432,11 +423,7 @@ fn parse_versioned_config(
 }
 
 fn insert_config_version(contents: &str, bom_len: usize) -> String {
-    let newline = if contents.contains("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
+    let newline = if contents.contains("\r\n") { "\r\n" } else { "\n" };
     let mut migrated = String::with_capacity(contents.len() + 12);
     migrated.push_str(&contents[..bom_len]);
     migrated.push_str("version = 1");
@@ -466,9 +453,7 @@ fn rewrite_scoop_header(line: &str, line_no: usize) -> Result<String, String> {
 
     let leading = &line[..line.len() - trimmed.len()];
     let Some(close_idx) = trimmed.find(']') else {
-        return Err(format!(
-            "line {line_no}: unterminated [scoop.<package>] header"
-        ));
+        return Err(format!("line {line_no}: unterminated [scoop.<package>] header"));
     };
     let header = &trimmed[..=close_idx];
     let trailer = &trimmed[close_idx + 1..];
@@ -543,23 +528,18 @@ fn reload_runtime_config(path: &Path, trigger: WatchTrigger) {
         return;
     };
     if let Some(lock) = CONFIG.get() {
+        let level = config.main.log_level_filter();
+        let next = Arc::new(config);
         match lock.write() {
             Ok(mut guard) => {
-                let level = config.main.log_level_filter();
-                *guard = Arc::new(config);
+                let previous = std::mem::replace(&mut *guard, next);
                 log::set_max_level(level);
-                log::info!(
-                    "reloaded config from {} via {}",
-                    path.display(),
-                    trigger.label()
-                );
+                drop(guard);
+                drop(previous);
+                log::info!("reloaded config from {} via {}", path.display(), trigger.label());
             }
             Err(error) => {
-                log::error!(
-                    "failed to apply config reload from {}: {}",
-                    path.display(),
-                    error
-                );
+                log::error!("failed to apply config reload from {}: {}", path.display(), error);
             }
         }
     }
@@ -623,6 +603,3 @@ impl InjectorConfig {
         self
     }
 }
-
-#[cfg(test)]
-mod tests;
