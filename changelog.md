@@ -1,20 +1,10 @@
-## v121.14
+## 模块更新
 
-**新增**
-- WebUI：一键配置隐藏应用列表（原版）
-- WebUI：写入配置前自动创建父目录
+- 同步上游 `qwq233/OhMyKeymint` v1.2.6（BoringSSL/dependency 更新、injector 重构）
+- 修复部分 keybox 在 `algorithm="rsa"` 块里放 EC 私钥导致解析失败、keybox.xml 被覆盖成 5.4KB 内置模板的问题；现在会丢弃坏 RSA 条目并按 EC-only 签发 RSA 证明
+- WebUI 改为 Miuix 风格：首页卡片阴影、应用选择整行分割线、弹窗只保留一层
+- 应用选择新增「用户软件 / 系统软件」切换，系统软件只显示名称、不加载图标
+- 日志级别弹窗恢复滚动，内部卡片不再叠加阴影
 
-**修复**
-- 修复 vbmeta 来源不可用时的回退失败
-- 允许 patchlevel 降级
-- 动态库加载优先使用 `/system/lib64`
-
-**兼容性**
-- 合并上游 master（qwq233/OhMyKeymint）
-- 注入器：接口 token 绑定到实际接收它的 binder 节点
-- 注入器 / KeyMint：grant 支持通过 key id 命中
-- KeyMint：模拟安全世界操作耗时，时序更贴近真机
-- 构建：源码路径按 vendor keystore2 布局重映射
-
-> versionCode `236`（上一版 `224`），ARM64 模块包由 CI 构建完成后自动附在本页。
+安装包：`安卓设备隐藏bl-release-arm64-v8a-1.2.6-260.zip`（arm64-v8a）
 
