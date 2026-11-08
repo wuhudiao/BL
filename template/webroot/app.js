@@ -390,11 +390,12 @@ async function downloadKeybox(url) {
 }
 
 
-async function listApps() {
-  const names = JSON.parse(ksu.listPackages('user'));
+async function listApps(type = 'user') {
+  const names = JSON.parse(ksu.listPackages(type));
   const info = JSON.parse(ksu.getPackagesInfo(JSON.stringify(names)));
   return info
-    .filter((a) => a && a.packageName && !a.error && !a.isSystem)
+    .filter((a) => a && a.packageName && !a.error)
+    .filter((a) => type === 'system' || !a.isSystem)
     .map((a) => ({ pkg: a.packageName, label: a.appLabel || a.packageName }))
     .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN', { sensitivity: 'base' }));
 }
@@ -461,7 +462,13 @@ function row(entry) {
   node.appendChild(iconNode(entry.icon));
   const body = el('div', 'body');
   body.appendChild(el('div', 'title', entry.title));
-  if (entry.summary) body.appendChild(el('div', 'summary', entry.summary));
+  if (entry.summaryHtml) {
+    const summary = el('div', 'summary');
+    summary.innerHTML = entry.summaryHtml;
+    body.appendChild(summary);
+  } else if (entry.summary) {
+    body.appendChild(el('div', 'summary', entry.summary));
+  }
   node.appendChild(body);
   if (entry.checked !== undefined) {
     const sw = el('div', 'switch' + (entry.checked ? ' on' : ''));
@@ -483,10 +490,12 @@ function card(entries) {
   return node;
 }
 
-function group(title, entries) {
+function group(title, entries, extraClass) {
   const fragment = document.createDocumentFragment();
   if (title) fragment.appendChild(el('div', 'small-title', title));
-  fragment.appendChild(card(entries));
+  const node = card(entries);
+  if (extraClass) node.classList.add(extraClass);
+  fragment.appendChild(node);
   return fragment;
 }
 
@@ -520,8 +529,8 @@ function render(state, error) {
     return;
   }
 
-  const running = '● 运行中';
-  const notRunning = '● 未运行';
+  const running = '<span class="dot ok">●</span>运行中';
+  const notRunning = '<span class="dot no">●</span>未运行';
   const keyboxSummary = state.keyboxExists
     ? formatSize(state.keyboxSize) + ' 的 keybox.xml'
     : '还没有 keybox.xml';
@@ -530,11 +539,11 @@ function render(state, error) {
     icon: 'shield',
     title: '安卓设备隐藏bl',
     summary: state.version + ' · ' + (state.enabled ? '已启用' : '已禁用'),
-  }]));
+  }], 'hero'));
 
   page.appendChild(group('状态', [
-    { icon: 'lock', title: 'keymint 守护进程', summary: state.keymintRunning ? running : notRunning },
-    { icon: 'explore', title: 'injector 守护进程', summary: state.injectorRunning ? running : notRunning },
+    { icon: 'lock', title: 'keymint 守护进程', summaryHtml: state.keymintRunning ? running : notRunning },
+    { icon: 'explore', title: 'injector 守护进程', summaryHtml: state.injectorRunning ? running : notRunning },
   ]));
 
   page.appendChild(group('功能', [
@@ -630,6 +639,8 @@ async function openAppsDialog(state) {
   let apps = null;
   let loadError = null;
   let query = '';
+  let mode = 'user';
+  const cache = { user: null, system: null };
 
   const body = el('div', 'dialog-body');
   const searchWrap = el('div');
@@ -643,6 +654,44 @@ async function openAppsDialog(state) {
   body.appendChild(listBox);
 
   const summaryNode = el('div', 'dialog-summary');
+  const modeSwitch = el('div', 'segmented');
+
+  function paintMode() {
+    modeSwitch.replaceChildren();
+    [['user', '用户软件'], ['system', '系统软件']].forEach(([id, label]) => {
+      const button = el('button', mode === id ? 'active' : '', label);
+      button.type = 'button';
+      button.addEventListener('click', () => switchMode(id));
+      modeSwitch.appendChild(button);
+    });
+  }
+
+  async function loadApps() {
+    const wanted = mode;
+    apps = cache[wanted];
+    loadError = null;
+    paintList();
+    if (apps !== null) return;
+    try {
+      const loaded = await listApps(wanted);
+      cache[wanted] = loaded;
+      if (mode !== wanted) return;
+      apps = loaded;
+      paintList();
+    } catch (e) {
+      if (mode !== wanted) return;
+      apps = [];
+      loadError = e.message || String(e);
+      paintList();
+    }
+  }
+
+  function switchMode(next) {
+    if (mode === next) return;
+    mode = next;
+    paintMode();
+    loadApps();
+  }
 
   function paintList() {
     listBox.replaceChildren();
@@ -661,19 +710,22 @@ async function openAppsDialog(state) {
       listBox.appendChild(el('div', 'muted', '没有可显示的应用'));
       return;
     }
+    const system = mode === 'system';
     shown.forEach((app) => {
       const on = chosen.has(app.pkg);
-      const line = el('div', 'row pressable');
-      const icon = document.createElement('img');
-      icon.className = 'app-icon';
-      icon.loading = 'lazy';
-      icon.alt = '';
-      icon.src = 'ksu://icon/' + app.pkg;
-      icon.addEventListener('error', () => { icon.style.visibility = 'hidden'; });
-      line.appendChild(icon);
+      const line = el('div', 'row pressable' + (system ? ' no-icon' : '') + (on ? ' selected' : ''));
+      if (!system) {
+        const icon = document.createElement('img');
+        icon.className = 'app-icon';
+        icon.loading = 'lazy';
+        icon.alt = '';
+        icon.src = 'ksu://icon/' + app.pkg;
+        icon.addEventListener('error', () => { icon.style.visibility = 'hidden'; });
+        line.appendChild(icon);
+      }
       const text = el('div', 'body');
       text.appendChild(el('div', 'title', app.label));
-      text.appendChild(el('div', 'summary', app.pkg));
+      if (!system) text.appendChild(el('div', 'summary', app.pkg));
       line.appendChild(text);
       const box = el('div', 'checkbox' + (on ? ' on' : ''));
       box.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + ICONS.check + '"/></svg>';
@@ -697,6 +749,8 @@ async function openAppsDialog(state) {
   const dialog = document.createElement('div');
   dialog.className = 'dialog';
   dialog.appendChild(el('div', 'dialog-title', '路由到 OMK 的应用'));
+  paintMode();
+  dialog.appendChild(modeSwitch);
   dialog.appendChild(summaryNode);
   dialog.appendChild(body);
   const bar = el('div', 'dialog-actions');
@@ -718,13 +772,7 @@ async function openAppsDialog(state) {
   dialogBox.replaceChildren(dialog);
   overlay.hidden = false;
 
-  try {
-    apps = await listApps();
-  } catch (e) {
-    apps = [];
-    loadError = e.message || String(e);
-  }
-  paintList();
+  loadApps();
 }
 
 
@@ -1060,6 +1108,7 @@ const HMA_PRESET_RULES = [
 
 function renderHideApp() {
   page.replaceChildren();
+  page.appendChild(el('div', 'page-title', '隐藏应用列表'));
   page.appendChild(group(null, [
     {
       icon: 'visibilityOff',
