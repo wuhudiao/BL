@@ -605,8 +605,8 @@ function openDialog({ title, summary, body, actions, centered, fillActions, dism
   if (title) dialogBox.appendChild(el('div', 'dialog-title', title));
   if (summary) dialogBox.appendChild(el('div', 'dialog-summary', summary));
   if (body) {
-    const box = el('div', 'dialog-body');
-    box.appendChild(body);
+    const box = body.classList.contains('dialog-body') ? body : el('div', 'dialog-body');
+    if (box !== body) box.appendChild(body);
     dialogBox.appendChild(box);
   }
   const bar = el('div', 'dialog-actions' + (centered ? '' : ' end') + (fillActions ? ' fill' : ''));
@@ -746,13 +746,13 @@ async function openAppsDialog(state) {
   search.addEventListener('input', () => { query = search.value; paintList(); });
   paintSummary();
 
-  const dialog = document.createElement('div');
-  dialog.className = 'dialog';
-  dialog.appendChild(el('div', 'dialog-title', '路由到 OMK 的应用'));
+  dialogDismissable = true;
+  dialogBox.replaceChildren();
+  dialogBox.appendChild(el('div', 'dialog-title', '路由到 OMK 的应用'));
   paintMode();
-  dialog.appendChild(modeSwitch);
-  dialog.appendChild(summaryNode);
-  dialog.appendChild(body);
+  dialogBox.appendChild(modeSwitch);
+  dialogBox.appendChild(summaryNode);
+  dialogBox.appendChild(body);
   const bar = el('div', 'dialog-actions');
   bar.appendChild(mkBtn('全选', () => {
     (apps || []).forEach((a) => chosen.add(a.pkg));
@@ -767,9 +767,8 @@ async function openAppsDialog(state) {
       return '已保存 ' + chosen.size + ' 个应用';
     });
   }, true));
-  dialog.appendChild(bar);
+  dialogBox.appendChild(bar);
 
-  dialogBox.replaceChildren(dialog);
   overlay.hidden = false;
 
   loadApps();
