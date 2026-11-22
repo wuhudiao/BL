@@ -12,7 +12,7 @@ Android Keystore 伪造器的自定义密钥库实现
 
 ## 安装与配置
 
-**需要 Android 12 或更高版本。**
+**需要 Android 13 或更高版本。**
 
 1. 安装本模块。
 2. 如需要，[配置 OMK](docs/CONFIGURATION.md)。
@@ -38,6 +38,9 @@ touch /data/adb/omk/restart.all
 
 哪些更改需要重启组件或完全重启设备，请参见
 [配置指南](docs/CONFIGURATION.md#how-changes-are-loaded)。
+
+重启 keymint 会清空内存中的用户 CredentialEncrypted super key。重启后需要锁屏一次，
+再用 PIN、图案或密码解锁，要求用户认证的密钥才能重新创建或导入；指纹解锁不能恢复。
 
 ## 许可证
 

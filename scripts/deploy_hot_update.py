@@ -443,6 +443,11 @@ def main() -> int:
     trigger_restart(args.serial, args.restart)
     after = wait_for_restart(args.serial, args.restart, before, args.wait_seconds)
     print_service_state("After restart", after)
+    if args.restart in ("all", "keymint"):
+        print_status(
+            "keymint lost the user's CredentialEncrypted super key: lock the device and "
+            "unlock it once with the lock-screen credential before probing auth-bound keys."
+        )
     return 0
 
 

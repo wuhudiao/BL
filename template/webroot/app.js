@@ -588,7 +588,9 @@ function render(state, error) {
 
 async function doRestart(what) {
   await restart(what);
-  return what === 'all' ? '已请求全部重启' : '已请求重启 ' + what;
+  if (what === 'all') return '已请求全部重启；完成后需用锁屏密码解锁一次';
+  if (what === 'keymint') return '已请求重启 keymint；完成后需用锁屏密码解锁一次';
+  return '已请求重启 injector';
 }
 
 

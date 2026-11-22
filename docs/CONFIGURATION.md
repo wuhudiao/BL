@@ -58,6 +58,15 @@ an already-open operation with the new route. If a process restart is needed
 for a clean boundary, restart the injector only. An injector-only setting
 change does not require a keymint restart.
 
+A keymint restart clears the user's CredentialEncrypted super key from memory.
+Android only supplies the password behind that key once, when the lock screen
+is unlocked with its credential. Until the device is locked and unlocked again
+with the PIN, pattern, or password, creating or importing a key that requires
+user authentication fails with `LOCKED` and a log line containing
+`Device is locked`. Unlocking with a fingerprint does not restore it. Normal use
+is unaffected because the component restarts only during install, update, or a
+deliberate restart.
+
 ## `config.toml`
 
 ### Complete annotated example
@@ -152,9 +161,11 @@ back to `debug`, but relying on that fallback can hide a spelling mistake.
 #### `force_skip_system_biometric_hat_verification`
 
 This is an insecure compatibility switch for a device whose System KeyMint
-cannot verify biometric authentication tokens correctly. When `true`, OMK
-accepts a token whose structure is valid without asking System KeyMint to
-verify its authentication code.
+cannot verify biometric authentication tokens correctly. OMK caches original
+authentication tokens and verifies their MAC with System KeyMint when a key
+operation consumes them, before translating them to OMK's MAC domain. When
+`true`, OMK skips that MAC verification for structurally valid tokens. Each
+operation reuses its successfully translated token for subsequent calls.
 
 Keep it `false` unless a maintainer is diagnosing a confirmed device-specific
 problem. It does not hide root and is not a general fix for fingerprint or
@@ -598,14 +609,6 @@ Each switch controls one Android KeyStore service operation. For a caller
 allowed by the filter, `true` routes that operation to OMK and `false` leaves
 that operation on System. These switches do not migrate existing keys or make
 System-created key references usable by OMK.
-
-An operation selected for OMK returns its OMK result or an AOSP-compatible error.
-Before executing an OMK request ahead of System, the injector checks the native
-receiving Binder's descriptor and preserves the interface token's UTF-16 identity.
-Mismatched requests remain unchanged for the receiving service to reject. HIDL
-connections retain their existing hook coverage and are not queried as native Binders.
-Connection and transaction failures end the current request without retries or
-switching to System. A later independent request may establish a new connection.
 
 Keep all switches `true` for normal use. Mixing System and OMK operations for
 the same app can cause missing-key errors, inconsistent lists, or failed
