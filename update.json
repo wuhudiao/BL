@@ -1,6 +1,6 @@
 {
-  "version": "1.2.6-260",
-  "versionCode": 260,
-  "zipUrl": "https://github.com/wuhudiao/BL/releases/download/1.2.6-260/bl-release-arm64-v8a-1.2.6-260.zip",
+  "version": "1.3.0-263",
+  "versionCode": 263,
+  "zipUrl": "https://github.com/wuhudiao/BL/releases/download/1.3.0-263/bl-release-arm64-v8a-1.3.0-263.zip",
   "changelog": "https://raw.githubusercontent.com/wuhudiao/BL/changelog/changelog.md"
 }
